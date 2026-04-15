@@ -136,16 +136,28 @@ def load_songs(csv_path: str) -> List[Dict]:
             })
     return songs
 
-def _score_song(user_prefs: Dict, song: Dict) -> float:
+DEFAULT_WEIGHTS: Dict[str, float] = {
+    "genre":        0.25,
+    "mood":         0.20,
+    "energy":       0.30,
+    "acousticness": 0.15,
+    "danceability": 0.10,
+}
+
+# def _score_song(user_prefs: Dict, song: Dict) -> float:          # ORIGINAL signature
+def _score_song(user_prefs: Dict, song: Dict,
+                weights: Optional[Dict[str, float]] = None) -> float:
     """
     Compute a weighted compatibility score between a user preference dict and a song dict.
 
     Expected keys in user_prefs: 'genre', 'mood', 'energy' (float), 'likes_acoustic' (bool).
-    Uses the same weighting as Recommender._score (genre 25%, mood 20%, energy 30%,
-    acousticness 15%, danceability 10%).
+    Default weighting: genre 25%, mood 20%, energy 30%, acousticness 15%, danceability 10%.
 
-    Returns a float in [0.0, 1.0].
+    Pass a custom ``weights`` dict with the same keys to override the defaults.
+    Note: weights need not sum to 1.0 — only relative magnitude matters for ranking.
     """
+    w = weights if weights is not None else DEFAULT_WEIGHTS
+
     genre_match = 1.0 if song["genre"] == user_prefs.get("genre") else 0.0
     mood_match = 1.0 if song["mood"] == user_prefs.get("mood") else 0.0
     energy_proximity = 1.0 - abs(song["energy"] - user_prefs.get("energy", 0.5))
@@ -154,11 +166,11 @@ def _score_song(user_prefs: Dict, song: Dict) -> float:
     danceability_score = song["danceability"]
 
     return (
-        genre_match        * 0.25 +
-        mood_match         * 0.20 +
-        energy_proximity   * 0.30 +
-        acousticness_fit   * 0.15 +
-        danceability_score * 0.10
+        genre_match        * w["genre"] +        # was * 0.25
+        mood_match         * w["mood"] +          # was * 0.20
+        energy_proximity   * w["energy"] +        # was * 0.30
+        acousticness_fit   * w["acousticness"] +  # was * 0.15
+        danceability_score * w["danceability"]    # was * 0.10
     )
 
 def _explain_song(user_prefs: Dict, song: Dict) -> str:
@@ -184,19 +196,24 @@ def _explain_song(user_prefs: Dict, song: Dict) -> str:
         reasons.append("it closely matches your overall listening profile")
     return "Recommended because " + ", and ".join(reasons) + "."
 
-def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tuple[Dict, float, str]]:
+# def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> ...:   # ORIGINAL signature
+def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5,
+                    weights: Optional[Dict[str, float]] = None) -> List[Tuple[Dict, float, str]]:
     """
     Functional implementation of the recommendation logic.
     Required by src/main.py
+
+    Pass a custom ``weights`` dict to experiment with different scoring priorities.
+    Omit it (or pass None) to use DEFAULT_WEIGHTS.
     """
-    scored = sorted(songs, key=lambda s: _score_song(user_prefs, s), reverse=True)
+    scored = sorted(songs, key=lambda s: _score_song(user_prefs, s, weights), reverse=True)
 
     results = []
     genre_counts: Dict[str, int] = {}
     for song in scored:
         genre = song["genre"]
         if genre_counts.get(genre, 0) < 2:
-            score = _score_song(user_prefs, song)
+            score = _score_song(user_prefs, song, weights)
             explanation = _explain_song(user_prefs, song)
             results.append((song, score, explanation))
             genre_counts[genre] = genre_counts.get(genre, 0) + 1
