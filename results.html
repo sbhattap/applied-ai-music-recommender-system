@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Music Recommender — Genre First</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 13.5px;
+      line-height: 1.45;
+      padding: 2rem 2.5rem;
+    }
+    h1 {
+      color: #89b4fa;
+      font-size: 1.1rem;
+      margin-bottom: 1.2rem;
+      letter-spacing: .04em;
+    }
+    pre {
+      white-space: pre;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎵 Music Recommender — Strategy: Genre First</h1>
+  <pre>==================================================================================
+  Profile : High-Energy Pop
+  genre=pop,  mood=happy,  energy=0.88,  likes_acoustic=False
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬──────────────────┬─────────────────┬─────────┬─────────┬──────────┬─────────┬─────────────────────────────────────────────╮
+  │   # │ Title            │ Artist          │ Genre   │ Mood    │   Energy │   Score │ Why                                         │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   1 │ Sunrise City     │ Neon Echo       │ pop     │ happy   │     0.82 │  0.8914 │ • it&#x27;s pop (your favorite genre)            │
+  │     │                  │                 │         │         │          │         │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.82) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 82)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   2 │ Gym Hero         │ Max Pulse       │ pop     │ intense │     0.93 │  0.7799 │ • it&#x27;s pop (your favorite genre)            │
+  │     │                  │                 │         │         │          │         │ • its energy (0.93) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 88)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   3 │ Funky Parliament │ The Groove Unit │ funk    │ happy   │     0.86 │  0.7098 │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.86) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 74)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   4 │ Rainy Seoul      │ Jisoo Park      │ k-pop   │ happy   │     0.78 │  0.6986 │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.78) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 91)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   5 │ Tides of Havana  │ Ruiz Collective │ latin   │ happy   │     0.85 │  0.6853 │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.85) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 77)      │
+  ╰─────┴──────────────────┴─────────────────┴─────────┴─────────┴──────────┴─────────┴─────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬──────────────────┬─────────────────┬─────────┬─────────┬──────────┬─────────┬─────────────────────────────────────────────╮
+  │   # │ Title            │ Artist          │ Genre   │ Mood    │   Energy │   Score │ Why                                         │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   1 │ Sunrise City     │ Neon Echo       │ pop     │ happy   │     0.82 │  0.958  │ • it&#x27;s pop (your favorite genre)            │
+  │     │                  │                 │         │         │          │         │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.82) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 82)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   2 │ Gym Hero         │ Max Pulse       │ pop     │ intense │     0.93 │  0.7749 │ • it&#x27;s pop (your favorite genre)            │
+  │     │                  │                 │         │         │          │         │ • its energy (0.93) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 88)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   3 │ Funky Parliament │ The Groove Unit │ funk    │ happy   │     0.86 │  0.4721 │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.86) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 74)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   4 │ Rainy Seoul      │ Jisoo Park      │ k-pop   │ happy   │     0.78 │  0.4586 │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.78) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 91)      │
+  ├─────┼──────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   5 │ Tides of Havana  │ Ruiz Collective │ latin   │ happy   │     0.85 │  0.458  │ • it matches your happy mood preference     │
+  │     │                  │                 │         │         │          │         │ • its energy (0.85) is close to your target │
+  │     │                  │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 77)      │
+  ╰─────┴──────────────────┴─────────────────┴─────────┴─────────┴──────────┴─────────┴─────────────────────────────────────────────╯
+
+==================================================================================
+  Profile : Chill Lofi
+  genre=lofi,  mood=chill,  energy=0.38,  likes_acoustic=True
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬─────────────────────┬────────────────┬─────────┬─────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title               │ Artist         │ Genre   │ Mood    │   Energy │   Score │ Why                                              │
+  ├─────┼─────────────────────┼────────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Library Rain        │ Paper Lanterns │ lofi    │ chill   │     0.35 │  0.9069 │ • it&#x27;s lofi (your favorite genre)                │
+  │     │                     │                │         │         │          │         │ • it matches your chill mood preference          │
+  │     │                     │                │         │         │          │         │ • its energy (0.35) is close to your target      │
+  │     │                     │                │         │         │          │         │ • it has a strong acoustic feel                  │
+  │     │                     │                │         │         │          │         │ • its emotional tone (valence 0.60) matches your │
+  │     │                     │                │         │         │          │         │ preference                                       │
+  │     │                     │                │         │         │          │         │ • it&#x27;s a popular track (popularity 71)           │
+  ├─────┼─────────────────────┼────────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Midnight Coding     │ LoRoom         │ lofi    │ chill   │     0.42 │  0.8968 │ • it&#x27;s lofi (your favorite genre)                │
+  │     │                     │                │         │         │          │         │ • it matches your chill mood preference          │
+  │     │                     │                │         │         │          │         │ • its energy (0.42) is close to your target      │
+  │     │                     │                │         │         │          │         │ • it has a strong acoustic feel                  │
+  │     │                     │                │         │         │          │         │ • its emotional tone (valence 0.56) matches your │
+  │     │                     │                │         │         │          │         │ preference                                       │
+  │     │                     │                │         │         │          │         │ • it&#x27;s a popular track (popularity 74)           │
+  ├─────┼─────────────────────┼────────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Porch Swing Lullaby │ Clara June     │ folk    │ chill   │     0.33 │  0.6779 │ • it matches your chill mood preference          │
+  │     │                     │                │         │         │          │         │ • its energy (0.33) is close to your target      │
+  │     │                     │                │         │         │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼─────────────────────┼────────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Spacewalk Thoughts  │ Orbit Bloom    │ ambient │ chill   │     0.28 │  0.6698 │ • it matches your chill mood preference          │
+  │     │                     │                │         │         │          │         │ • its energy (0.28) is close to your target      │
+  │     │                     │                │         │         │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼─────────────────────┼────────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Coffee Shop Stories │ Slow Stereo    │ jazz    │ relaxed │     0.37 │  0.5443 │ • its energy (0.37) is close to your target      │
+  │     │                     │                │         │         │          │         │ • it has a strong acoustic feel                  │
+  ╰─────┴─────────────────────┴────────────────┴─────────┴─────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬─────────────────────┬────────────────┬─────────┬────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title               │ Artist         │ Genre   │ Mood   │   Energy │   Score │ Why                                              │
+  ├─────┼─────────────────────┼────────────────┼─────────┼────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Library Rain        │ Paper Lanterns │ lofi    │ chill  │     0.35 │  0.963  │ • it&#x27;s lofi (your favorite genre)                │
+  │     │                     │                │         │        │          │         │ • it matches your chill mood preference          │
+  │     │                     │                │         │        │          │         │ • its energy (0.35) is close to your target      │
+  │     │                     │                │         │        │          │         │ • it has a strong acoustic feel                  │
+  │     │                     │                │         │        │          │         │ • its emotional tone (valence 0.60) matches your │
+  │     │                     │                │         │        │          │         │ preference                                       │
+  │     │                     │                │         │        │          │         │ • it&#x27;s a popular track (popularity 71)           │
+  ├─────┼─────────────────────┼────────────────┼─────────┼────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Midnight Coding     │ LoRoom         │ lofi    │ chill  │     0.42 │  0.9541 │ • it&#x27;s lofi (your favorite genre)                │
+  │     │                     │                │         │        │          │         │ • it matches your chill mood preference          │
+  │     │                     │                │         │        │          │         │ • its energy (0.42) is close to your target      │
+  │     │                     │                │         │        │          │         │ • it has a strong acoustic feel                  │
+  │     │                     │                │         │        │          │         │ • its emotional tone (valence 0.56) matches your │
+  │     │                     │                │         │        │          │         │ preference                                       │
+  │     │                     │                │         │        │          │         │ • it&#x27;s a popular track (popularity 74)           │
+  ├─────┼─────────────────────┼────────────────┼─────────┼────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Porch Swing Lullaby │ Clara June     │ folk    │ chill  │     0.33 │  0.4551 │ • it matches your chill mood preference          │
+  │     │                     │                │         │        │          │         │ • its energy (0.33) is close to your target      │
+  │     │                     │                │         │        │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼─────────────────────┼────────────────┼─────────┼────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Spacewalk Thoughts  │ Orbit Bloom    │ ambient │ chill  │     0.28 │  0.4475 │ • it matches your chill mood preference          │
+  │     │                     │                │         │        │          │         │ • its energy (0.28) is close to your target      │
+  │     │                     │                │         │        │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼─────────────────────┼────────────────┼─────────┼────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Island Breeze       │ Roots &amp; Rhythm │ reggae  │ happy  │     0.58 │  0.3155 │ • it closely matches your overall listening      │
+  │     │                     │                │         │        │          │         │ profile                                          │
+  ╰─────┴─────────────────────┴────────────────┴─────────┴────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+==================================================================================
+  Profile : Deep Intense Rock
+  genre=rock,  mood=intense,  energy=0.91,  likes_acoustic=False
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬───────────────────┬───────────────┬─────────┬─────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist        │ Genre   │ Mood    │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Storm Runner      │ Voltline      │ rock    │ intense │     0.91 │  0.9328 │ • it&#x27;s rock (your favorite genre)                │
+  │     │                   │               │         │         │          │         │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.91) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.48) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Circuit City      │ Polygon Ghost │ techno  │ intense │     0.94 │  0.7573 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.94) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.54) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 73)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Bass Drop Kingdom │ Hex Riot      │ edm     │ intense │     0.97 │  0.7462 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.97) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 85)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Gym Hero          │ Max Pulse     │ pop     │ intense │     0.93 │  0.7374 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.93) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 88)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Hollow Bones      │ Ashen Vale    │ metal   │ intense │     0.95 │  0.6964 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.95) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  ╰─────┴───────────────────┴───────────────┴─────────┴─────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬───────────────────┬───────────────┬─────────┬─────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist        │ Genre   │ Mood    │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Storm Runner      │ Voltline      │ rock    │ intense │     0.91 │  0.9756 │ • it&#x27;s rock (your favorite genre)                │
+  │     │                   │               │         │         │          │         │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.91) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.48) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Circuit City      │ Polygon Ghost │ techno  │ intense │     0.94 │  0.487  │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.94) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.54) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 73)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Bass Drop Kingdom │ Hex Riot      │ edm     │ intense │     0.97 │  0.4806 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.97) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 85)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Gym Hero          │ Max Pulse     │ pop     │ intense │     0.93 │  0.4794 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.93) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 88)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Hollow Bones      │ Ashen Vale    │ metal   │ intense │     0.95 │  0.4628 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.95) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it has a non-acoustic, produced sound          │
+  ╰─────┴───────────────────┴───────────────┴─────────┴─────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+==================================================================================
+  Profile : Conflicting Energy + Mood (adversarial)
+  genre=classical,  mood=melancholic,  energy=0.9,  likes_acoustic=True
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬───────────────────┬─────────────────┬────────────┬────────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist          │ Genre      │ Mood       │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Copper Cathedral  │ The Fold        │ classical  │ melancholi │     0.3  │  0.736  │ • it&#x27;s classical (your favorite genre)           │
+  │     │                   │                 │            │ c          │          │         │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │            │          │         │ • it has a strong acoustic feel                  │
+  │     │                   │                 │            │            │          │         │ • its emotional tone (valence 0.38) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Glass Houses      │ The Pale Echoes │ indie rock │ melancholi │     0.7  │  0.6164 │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • its emotional tone (valence 0.42) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Collapse &amp; Bloom  │ Driftwood Sea   │ post-rock  │ melancholi │     0.72 │  0.6042 │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ 12-Bar Heartbreak │ Dusty Rivers    │ blues      │ melancholi │     0.48 │  0.5758 │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • it has a strong acoustic feel                  │
+  │     │                   │                 │            │            │          │         │ • its emotional tone (valence 0.36) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Crown Up          │ Lasso Vibe      │ trap       │ confident  │     0.88 │  0.4914 │ • its energy (0.88) is close to your target      │
+  │     │                   │                 │            │            │          │         │ • it&#x27;s a popular track (popularity 86)           │
+  ╰─────┴───────────────────┴─────────────────┴────────────┴────────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬───────────────────┬─────────────────┬────────────┬────────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist          │ Genre      │ Mood       │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Copper Cathedral  │ The Fold        │ classical  │ melancholi │     0.3  │  0.8689 │ • it&#x27;s classical (your favorite genre)           │
+  │     │                   │                 │            │ c          │          │         │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │            │          │         │ • it has a strong acoustic feel                  │
+  │     │                   │                 │            │            │          │         │ • its emotional tone (valence 0.38) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Collapse &amp; Bloom  │ Driftwood Sea   │ post-rock  │ melancholi │     0.72 │  0.411  │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • it has a strong acoustic feel                  │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Glass Houses      │ The Pale Echoes │ indie rock │ melancholi │     0.7  │  0.4096 │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • its emotional tone (valence 0.42) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ 12-Bar Heartbreak │ Dusty Rivers    │ blues      │ melancholi │     0.48 │  0.3929 │ • it matches your melancholic mood preference    │
+  │     │                   │                 │            │ c          │          │         │ • it has a strong acoustic feel                  │
+  │     │                   │                 │            │            │          │         │ • its emotional tone (valence 0.36) matches your │
+  │     │                   │                 │            │            │          │         │ preference                                       │
+  ├─────┼───────────────────┼─────────────────┼────────────┼────────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Tides of Havana   │ Ruiz Collective │ latin      │ happy      │     0.85 │  0.2242 │ • its energy (0.85) is close to your target      │
+  │     │                   │                 │            │            │          │         │ • it&#x27;s a popular track (popularity 77)           │
+  ╰─────┴───────────────────┴─────────────────┴────────────┴────────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+==================================================================================
+  Profile : Acoustic EDM Contradiction (adversarial)
+  genre=edm,  mood=intense,  energy=0.97,  likes_acoustic=True
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬───────────────────┬───────────────┬─────────┬─────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist        │ Genre   │ Mood    │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Bass Drop Kingdom │ Hex Riot      │ edm     │ intense │     0.97 │  0.8484 │ • it&#x27;s edm (your favorite genre)                 │
+  │     │                   │               │         │         │          │         │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.97) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 85)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Circuit City      │ Polygon Ghost │ techno  │ intense │     0.94 │  0.6421 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.94) is close to your target      │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.54) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 73)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Gym Hero          │ Max Pulse     │ pop     │ intense │     0.93 │  0.6244 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.93) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 88)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Storm Runner      │ Voltline      │ rock    │ intense │     0.91 │  0.6218 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.91) is close to your target      │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.48) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Hollow Bones      │ Ashen Vale    │ metal   │ intense │     0.95 │  0.5958 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.95) is close to your target      │
+  ╰─────┴───────────────────┴───────────────┴─────────┴─────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬───────────────────┬───────────────┬─────────┬─────────┬──────────┬─────────┬──────────────────────────────────────────────────╮
+  │   # │ Title             │ Artist        │ Genre   │ Mood    │   Energy │   Score │ Why                                              │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   1 │ Bass Drop Kingdom │ Hex Riot      │ edm     │ intense │     0.97 │  0.9238 │ • it&#x27;s edm (your favorite genre)                 │
+  │     │                   │               │         │         │          │         │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.97) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 85)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   2 │ Circuit City      │ Polygon Ghost │ techno  │ intense │     0.94 │  0.4198 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.94) is close to your target      │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.54) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 73)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   3 │ Gym Hero          │ Max Pulse     │ pop     │ intense │     0.93 │  0.4134 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.93) is close to your target      │
+  │     │                   │               │         │         │          │         │ • it&#x27;s a popular track (popularity 88)           │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   4 │ Storm Runner      │ Voltline      │ rock    │ intense │     0.91 │  0.4106 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.91) is close to your target      │
+  │     │                   │               │         │         │          │         │ • its emotional tone (valence 0.48) matches your │
+  │     │                   │               │         │         │          │         │ preference                                       │
+  ├─────┼───────────────────┼───────────────┼─────────┼─────────┼──────────┼─────────┼──────────────────────────────────────────────────┤
+  │   5 │ Hollow Bones      │ Ashen Vale    │ metal   │ intense │     0.95 │  0.4042 │ • it matches your intense mood preference        │
+  │     │                   │               │         │         │          │         │ • its energy (0.95) is close to your target      │
+  ╰─────┴───────────────────┴───────────────┴─────────┴─────────┴──────────┴─────────┴──────────────────────────────────────────────────╯
+
+==================================================================================
+  Profile : No Exact Match in Catalogue (adversarial)
+  genre=jazz,  mood=happy,  energy=0.9,  likes_acoustic=False
+==================================================================================
+  ── ORIGINAL WEIGHTS ──
+  ╭─────┬──────────────────┬─────────────────┬───────────┬────────┬──────────┬─────────┬─────────────────────────────────────────────╮
+  │   # │ Title            │ Artist          │ Genre     │ Mood   │   Energy │   Score │ Why                                         │
+  ├─────┼──────────────────┼─────────────────┼───────────┼────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   1 │ Funky Parliament │ The Groove Unit │ funk      │ happy  │     0.86 │  0.7048 │ • it matches your happy mood preference     │
+  │     │                  │                 │           │        │          │         │ • its energy (0.86) is close to your target │
+  │     │                  │                 │           │        │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │           │        │          │         │ • it&#x27;s a popular track (popularity 74)      │
+  ├─────┼──────────────────┼─────────────────┼───────────┼────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   2 │ Rainy Seoul      │ Jisoo Park      │ k-pop     │ happy  │     0.78 │  0.6936 │ • it matches your happy mood preference     │
+  │     │                  │                 │           │        │          │         │ • its energy (0.78) is close to your target │
+  │     │                  │                 │           │        │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │           │        │          │         │ • it&#x27;s a popular track (popularity 91)      │
+  ├─────┼──────────────────┼─────────────────┼───────────┼────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   3 │ Sunrise City     │ Neon Echo       │ pop       │ happy  │     0.82 │  0.6864 │ • it matches your happy mood preference     │
+  │     │                  │                 │           │        │          │         │ • its energy (0.82) is close to your target │
+  │     │                  │                 │           │        │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │           │        │          │         │ • it&#x27;s a popular track (popularity 82)      │
+  ├─────┼──────────────────┼─────────────────┼───────────┼────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   4 │ Tides of Havana  │ Ruiz Collective │ latin     │ happy  │     0.85 │  0.6803 │ • it matches your happy mood preference     │
+  │     │                  │                 │           │        │          │         │ • its energy (0.85) is close to your target │
+  │     │                  │                 │           │        │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                  │                 │           │        │          │         │ • it&#x27;s a popular track (popularity 77)      │
+  ├─────┼──────────────────┼─────────────────┼───────────┼────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   5 │ Rooftop Lights   │ Indigo Parade   │ indie pop │ happy  │     0.76 │  0.649  │ • it matches your happy mood preference     │
+  │     │                  │                 │           │        │          │         │ • its energy (0.76) is close to your target │
+  │     │                  │                 │           │        │          │         │ • it&#x27;s a popular track (popularity 72)      │
+  ╰─────┴──────────────────┴─────────────────┴───────────┴────────┴──────────┴─────────┴─────────────────────────────────────────────╯
+
+  ── Strategy: GENRE FIRST ──
+  ╭─────┬─────────────────────┬─────────────────┬─────────┬─────────┬──────────┬─────────┬─────────────────────────────────────────────╮
+  │   # │ Title               │ Artist          │ Genre   │ Mood    │   Energy │   Score │ Why                                         │
+  ├─────┼─────────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   1 │ Coffee Shop Stories │ Slow Stereo     │ jazz    │ relaxed │     0.37 │  0.63   │ • it&#x27;s jazz (your favorite genre)           │
+  ├─────┼─────────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   2 │ Funky Parliament    │ The Groove Unit │ funk    │ happy   │     0.86 │  0.4691 │ • it matches your happy mood preference     │
+  │     │                     │                 │         │         │          │         │ • its energy (0.86) is close to your target │
+  │     │                     │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                     │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 74)      │
+  ├─────┼─────────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   3 │ Rainy Seoul         │ Jisoo Park      │ k-pop   │ happy   │     0.78 │  0.4556 │ • it matches your happy mood preference     │
+  │     │                     │                 │         │         │          │         │ • its energy (0.78) is close to your target │
+  │     │                     │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                     │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 91)      │
+  ├─────┼─────────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   4 │ Tides of Havana     │ Ruiz Collective │ latin   │ happy   │     0.85 │  0.455  │ • it matches your happy mood preference     │
+  │     │                     │                 │         │         │          │         │ • its energy (0.85) is close to your target │
+  │     │                     │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                     │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 77)      │
+  ├─────┼─────────────────────┼─────────────────┼─────────┼─────────┼──────────┼─────────┼─────────────────────────────────────────────┤
+  │   5 │ Sunrise City        │ Neon Echo       │ pop     │ happy   │     0.82 │  0.455  │ • it matches your happy mood preference     │
+  │     │                     │                 │         │         │          │         │ • its energy (0.82) is close to your target │
+  │     │                     │                 │         │         │          │         │ • it has a non-acoustic, produced sound     │
+  │     │                     │                 │         │         │          │         │ • it&#x27;s a popular track (popularity 82)      │
+  ╰─────┴─────────────────────┴─────────────────┴─────────┴─────────┴──────────┴─────────┴─────────────────────────────────────────────╯
+
+</pre>
+</body>
+</html>
