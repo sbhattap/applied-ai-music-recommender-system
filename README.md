@@ -11,7 +11,7 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This simulation uses a content-based recommender that scores every song in `data/songs.csv` against a user taste profile and returns the top-K results with diversity capping. The scoring formula combines seven weighted signals — genre, mood (with soft tag matching), energy, acousticness, danceability, valence, and popularity — so that recommendations reflect both the feel of the music and the user's mainstream vs. niche preference. Two implementations run in parallel: a clean OOP interface (`Recommender`) used by tests, and a functional interface (`recommend_songs`) used by the runner that also supports custom weight experiments.
 
 ---
 
@@ -27,19 +27,22 @@ Some prompts to answer:
 - How does your `Recommender` compute a score for each song
 - How do you choose which songs to recommend
 
-Real-world recommenders like Spotify or Apple Music typically combine two strategies: collaborative filtering, which finds patterns across millions of users to surface songs that people with similar taste have enjoyed, and content-based filtering, which looks directly at the features of a song — genre, energy, mood, tempo — and matches them to a user's stated preferences. Collaborative filtering is powerful but requires a lot of behavioral data (which we initially did not begin with) to work well; without it, new users and new songs get stuck in a cold-start problem where the system has nothing to go on. For this simulation, I prioritized content-based filtering because my dataset is small (10 songs) and there is no user interaction history to learn from. My recommender scores each song against a user profile using weighted audio features — giving the most weight to energy proximity and mood match, which tend to cross genre boundaries — and applies a light diversity cap so the results don't collapse into a single genre. This keeps the system transparent and explainable, even if it lacks the discovery power that a collaborative approach would bring at scale.
+Real-world recommenders like Spotify or Apple Music typically combine two strategies: collaborative filtering, which finds patterns across millions of users to surface songs that people with similar taste have enjoyed, and content-based filtering, which looks directly at the features of a song — genre, energy, mood, tempo — and matches them to a user's stated preferences. Collaborative filtering is powerful but requires a lot of behavioral data (which we initially did not begin with) to work well; without it, new users and new songs get stuck in a cold-start problem where the system has nothing to go on. For this simulation, I prioritized content-based filtering because my dataset is small (30 songs) and there is no user interaction history to learn from. My recommender scores each song against a user profile using weighted audio features — giving the most weight to energy proximity and mood match, which tend to cross genre boundaries — and applies a light diversity cap so the results don't collapse into a single genre. This keeps the system transparent and explainable, even if it lacks the discovery power that a collaborative approach would bring at scale.
 
 **Song features used in scoring:**
 
 | Feature | Type | Description |
 |---|---|---|
-| `genre` | categorical | Musical genre (e.g. pop, lofi, rock) — matched against user's favorite |
-| `mood` | categorical | Emotional tone (e.g. happy, chill, intense) — matched against user's preferred mood |
+| `genre` | categorical | Musical genre (e.g. pop, lofi, rock) — exact match against user's favorite |
+| `mood` | categorical | Primary emotional tone — full credit for exact match, half credit for tag match |
+| `mood_tags` | pipe-separated string | Extended mood tags (e.g. `"happy\|uplifting\|summer"`) — enables soft mood matching |
 | `energy` | float 0–1 | Intensity and activity level — scored by proximity to user's target |
-| `danceability` | float 0–1 | How suitable the track is for dancing — used as a tiebreaker signal |
+| `valence` | float 0–1 | Musical positiveness — scored by proximity to user's `target_valence` |
+| `danceability` | float 0–1 | How suitable the track is for dancing |
 | `acousticness` | float 0–1 | How acoustic vs. produced the track sounds — matched against user's acoustic preference |
+| `popularity` | int 0–100 | Chart popularity — rewarded or penalized based on user's `prefer_popular` setting |
 
-`tempo_bpm` and `valence` are stored on each `Song` object but not used in the current scoring formula — they are available for future experiments.
+`tempo_bpm`, `liveness`, `duration_sec`, `explicit`, and `release_decade` are stored on each `Song` object but not used in the current scoring formula.
 
 **UserProfile fields:**
 
@@ -49,6 +52,8 @@ Real-world recommenders like Spotify or Apple Music typically combine two strate
 | `favorite_mood` | string | The mood or vibe the user is looking for |
 | `target_energy` | float 0–1 | The energy level the user wants — songs close to this score higher |
 | `likes_acoustic` | bool | Whether the user prefers acoustic tracks over produced/electronic ones |
+| `target_valence` | float 0–1 | Preferred emotional positiveness: 0 = darker/sadder, 1 = upbeat (default 0.5) |
+| `prefer_popular` | bool | `True` rewards mainstream tracks; `False` rewards niche/underground picks (default `True`) |
 
 **Demo output:**
 
@@ -58,23 +63,35 @@ Real-world recommenders like Spotify or Apple Music typically combine two strate
 
 ## Algorithm Recipe
 
-1. **Collect inputs** — Read the user's taste profile (`favorite_genre`, `favorite_mood`, `target_energy`, `likes_acoustic`) and load every song from `data/new_songs.csv`.
+1. **Collect inputs** — Read the user's taste profile (`favorite_genre`, `favorite_mood`, `target_energy`, `likes_acoustic`, `target_valence`, `prefer_popular`) and load every song from `data/songs.csv`.
 
-2. **Loop over every song** — For each song in the catalog, compute a score between 0.0 and 1.0 using five weighted signals:
+2. **Select a ranking strategy** — Choose `ACTIVE_STRATEGY` in `main.py` to control which signal dominates. Three named presets are available:
 
-   | Signal | Weight | How it's calculated |
+   | Strategy | Dominant signal | Intent |
    |---|---|---|
-   | Genre match | 25% | 1.0 if genres match, else 0.0 |
-   | Mood match | 20% | 1.0 if moods match, else 0.0 |
-   | Energy proximity | 30% | `1 - abs(song.energy - target_energy)` |
-   | Acousticness fit | 15% | `song.acousticness` if user likes acoustic, else `1 - song.acousticness` |
-   | Danceability | 10% | Raw danceability value of the song |
+   | `genre_first` | genre 50% | Stay within the user's preferred genre above all else |
+   | `mood_first` | mood 50% | Match the user's vibe regardless of genre label |
+   | `energy_similarity` | energy 55% | Find the closest audio feel regardless of labels |
 
-3. **Sort descending** — Rank all songs from highest score to lowest.
+   Or use the balanced `ORIGINAL_WEIGHTS` (all signals share the load) as the comparison baseline.
 
-4. **Apply diversity filter** — Walk the sorted list and skip any song whose genre already has 2 representatives in the result set. This prevents the top-K from collapsing into a single genre.
+3. **Loop over every song** — For each song in the catalog, compute a weighted score using seven signals:
 
-5. **Return Top-K** — Stop once K songs have been collected. Return each song with its numeric score and a plain-English explanation of why it was chosen.
+   | Signal | Default weight | How it's calculated |
+   |---|---|---|
+   | Energy proximity | 25% | `1 - abs(song.energy - target_energy)` |
+   | Genre match | 20% | 1.0 if exact match, else 0.0 |
+   | Mood match | 15% | 1.0 primary · 0.5 tag match · 0.0 no match |
+   | Valence proximity | 12% | `1 - abs(song.valence - target_valence)` |
+   | Acousticness fit | 12% | `song.acousticness` if acoustic preferred, else `1 - song.acousticness` |
+   | Danceability | 8% | Raw danceability value of the song |
+   | Popularity fit | 8% | Normalized popularity (inverted if `prefer_popular=False`) |
+
+4. **Sort descending** — Rank all songs from highest score to lowest.
+
+5. **Apply diversity filter** — Walk the sorted list and skip any song whose genre already has 2 representatives in the result set. This prevents the top-K from collapsing into a single genre.
+
+6. **Return Top-K** — Stop once K songs have been collected. Return each song with its numeric score and a bullet-point explanation of why it was chosen, displayed as a formatted table.
 
 ---
 
@@ -85,19 +102,28 @@ Real-world recommenders like Spotify or Apple Music typically combine two strate
 1. Create a virtual environment (optional but recommended):
 
    ```bash
-   source .venv\Scripts\activate         # Windows
+   source .venv/Scripts/activate         # Windows (Git Bash)
+   ```
 
-2. Install dependencies
+2. Install dependencies:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. Run the app:
+3. Run the simulation:
 
-```bash
-python -m src.main
-```
+   ```bash
+   python -m src.main
+   ```
+
+4. **Save output to a styled HTML file** (opens in any browser):
+
+   ```bash
+   python -m src.main -o results.html
+   ```
+
+   Output streams to the terminal in real-time and is also saved. To switch the active ranking strategy, change `ACTIVE_STRATEGY` in `src/main.py` to `"genre_first"`, `"mood_first"`, or `"energy_similarity"`.
 
 ### Running Tests
 
@@ -119,9 +145,9 @@ Three profiles were designed to represent clearly different listener types and r
 
 | Profile | Key preferences | Top result | Score |
 |---|---|---|---|
-| High-Energy Pop | genre=pop, mood=happy, energy=0.88, non-acoustic | Sunrise City | 0.934 |
-| Chill Lofi | genre=lofi, mood=chill, energy=0.38, acoustic | Library Rain | 0.928 |
-| Deep Intense Rock | genre=rock, mood=intense, energy=0.91, non-acoustic | Storm Runner | 0.951 |
+| High-Energy Pop | genre=pop, mood=happy, energy=0.88, non-acoustic | Sunrise City | 0.8914 |
+| Chill Lofi | genre=lofi, mood=chill, energy=0.38, acoustic | Library Rain | 0.9069 |
+| Deep Intense Rock | genre=rock, mood=intense, energy=0.91, non-acoustic | Storm Runner | 0.9328 |
 
 **Findings:**
 - When a profile's genre, mood, and energy all agreed with a song in the catalog, the top result scored very high (above 0.90). The system worked exactly as expected for "well-defined" users.
@@ -165,19 +191,21 @@ The one jazz track in the catalog ("Coffee Shop Stories") has mood=relaxed and e
 
 ---
 
-### Experiment 3 — Weight shift: energy doubled, genre halved
+### Experiment 3 — Named ranking strategies
 
-The scoring weights were changed from the defaults to test how sensitive the ranking is to weight changes.
+Three named strategies were introduced to make weight-shifting explicit and intentional. Each gives one signal a dominant share so the output reflects a clear listening intent rather than a balanced average. `ACTIVE_STRATEGY` in `main.py` switches the right-column output.
 
-| Factor | Original | Shifted |
-|---|---|---|
-| Genre match | 25% | 12.5% |
-| Mood match | 20% | 20% |
-| Energy proximity | 30% | 60% |
-| Acousticness fit | 15% | 15% |
-| Danceability | 10% | 10% |
+| Signal | Default weights | `genre_first` | `mood_first` | `energy_similarity` |
+|---|---|---|---|---|
+| Genre match | 20% | **50%** | 8% | 3% |
+| Mood match | 15% | 20% | **50%** | 5% |
+| Energy proximity | 25% | 15% | 20% | **55%** |
+| Acousticness fit | 12% | 7% | 8% | 15% |
+| Danceability | 8% | 4% | 5% | 12% |
+| Valence proximity | 12% | 3% | 7% | 8% |
+| Popularity fit | 8% | 1% | 2% | 2% |
 
-The weights no longer sum to 100% (they sum to 117.5%). Scores are higher overall, but only relative rank matters for evaluating the shift.
+Each run displays results as formatted tables with per-song bullet-point explanations.
 
 **What changed for normal profiles:**
 - Rank order was completely stable for all three normal profiles. "Sunrise City," "Library Rain," and "Storm Runner" stayed at #1.
@@ -194,7 +222,7 @@ The weights no longer sum to 100% (they sum to 117.5%). Scores are higher overal
 
 ## Limitations and Risks
 
-The catalog only contains 10 songs, so the diversity cap and genre-fallback logic are working with almost no room — a user asking for jazz gets one jazz option, and if that song's other traits don't match, the recommender quietly substitutes songs from unrelated genres without any warning. The scoring formula treats all five features as independent and combines them with fixed weights, so it cannot detect or flag contradictory preferences (like wanting high energy and a melancholic mood at the same time) — it simply averages the conflicting signals and returns whatever is "least wrong." Because there is no user interaction history, the system cannot learn or improve over time; it will give the same recommendations to two users with identical profiles even if one of them consistently skips every pop song it surfaces.
+The catalog contains 30 songs across 27 genres, but most genres still have only one or two representatives — a user asking for jazz gets one jazz option, and if that song's other traits don't match, the recommender quietly substitutes songs from unrelated genres without any warning. The scoring formula treats all seven features as independent and combines them with fixed weights, so it cannot detect or flag contradictory preferences (like wanting high energy and a melancholic mood at the same time) — it simply averages the conflicting signals and returns whatever is "least wrong." The `prefer_popular` field defaults to `True`, which means every scoring run gives a quiet advantage to chart-popular songs unless the user explicitly opts out — a subtle mainstream bias baked into the defaults. Several loaded fields (`tempo_bpm`, `liveness`, `duration_sec`, `explicit`, `release_decade`) carry zero weight in scoring, so two songs with very different tempos or live vs. studio feels are still treated identically. Because there is no user interaction history, the system cannot learn or improve over time; it will give the same recommendations to two users with identical profiles even if one of them consistently skips every pop song it surfaces.
 
 ---
 

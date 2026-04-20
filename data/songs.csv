@@ -1,11 +1,31 @@
-id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness
-1,Sunrise City,Neon Echo,pop,happy,0.82,118,0.84,0.79,0.18
-2,Midnight Coding,LoRoom,lofi,chill,0.42,78,0.56,0.62,0.71
-3,Storm Runner,Voltline,rock,intense,0.91,152,0.48,0.66,0.10
-4,Library Rain,Paper Lanterns,lofi,chill,0.35,72,0.60,0.58,0.86
-5,Gym Hero,Max Pulse,pop,intense,0.93,132,0.77,0.88,0.05
-6,Spacewalk Thoughts,Orbit Bloom,ambient,chill,0.28,60,0.65,0.41,0.92
-7,Coffee Shop Stories,Slow Stereo,jazz,relaxed,0.37,90,0.71,0.54,0.89
-8,Night Drive Loop,Neon Echo,synthwave,moody,0.75,110,0.49,0.73,0.22
-9,Focus Flow,LoRoom,lofi,focused,0.40,80,0.59,0.60,0.78
-10,Rooftop Lights,Indigo Parade,indie pop,happy,0.76,124,0.81,0.82,0.35
+id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness,popularity,release_decade,mood_tags,liveness,duration_sec,explicit
+1,Sunrise City,Neon Echo,pop,happy,0.82,118,0.84,0.79,0.18,82,2020s,happy|uplifting|summer,0.12,198,0
+2,Midnight Coding,LoRoom,lofi,chill,0.42,78,0.56,0.62,0.71,74,2020s,chill|study|focus,0.08,214,0
+3,Storm Runner,Voltline,rock,intense,0.91,152,0.48,0.66,0.10,68,2010s,intense|adrenaline|power,0.22,243,0
+4,Library Rain,Paper Lanterns,lofi,chill,0.35,72,0.60,0.58,0.86,71,2020s,chill|rainy|study,0.06,187,0
+5,Gym Hero,Max Pulse,pop,intense,0.93,132,0.77,0.88,0.05,88,2020s,intense|workout|pump,0.10,205,0
+6,Spacewalk Thoughts,Orbit Bloom,ambient,chill,0.28,60,0.65,0.41,0.92,62,2010s,chill|dreamy|spacey,0.04,320,0
+7,Coffee Shop Stories,Slow Stereo,jazz,relaxed,0.37,90,0.71,0.54,0.89,65,2010s,relaxed|cozy|morning,0.35,267,0
+8,Night Drive Loop,Neon Echo,synthwave,moody,0.75,110,0.49,0.73,0.22,79,2020s,moody|nostalgic|drive,0.08,228,0
+9,Focus Flow,LoRoom,lofi,focused,0.40,80,0.59,0.60,0.78,76,2020s,focused|study|calm,0.07,195,0
+10,Rooftop Lights,Indigo Parade,indie pop,happy,0.76,124,0.81,0.82,0.35,72,2010s,happy|indie|carefree,0.18,211,0
+11,Desert Wind,Mesa Sands,country,relaxed,0.55,98,0.74,0.63,0.80,60,2010s,relaxed|open|country,0.28,238,0
+12,Bass Drop Kingdom,Hex Riot,edm,intense,0.97,140,0.66,0.95,0.03,85,2020s,intense|party|euphoric,0.14,194,0
+13,Rainy Seoul,Jisoo Park,k-pop,happy,0.78,120,0.85,0.87,0.14,91,2020s,happy|energetic|cute,0.12,199,0
+14,Copper Cathedral,The Fold,classical,melancholic,0.30,68,0.38,0.22,0.97,58,2010s,melancholic|reflective|dramatic,0.42,312,0
+15,Street Prophet,Comet Kaze,hip-hop,confident,0.80,95,0.62,0.84,0.09,83,2020s,confident|street|bold,0.16,224,1
+16,Tides of Havana,Ruiz Collective,latin,happy,0.85,110,0.90,0.91,0.28,77,2010s,happy|dance|festive,0.32,248,0
+17,Hollow Bones,Ashen Vale,metal,intense,0.95,168,0.32,0.55,0.06,64,2010s,intense|dark|aggressive,0.24,279,0
+18,Porch Swing Lullaby,Clara June,folk,chill,0.33,75,0.76,0.45,0.94,66,2020s,chill|gentle|acoustic,0.38,221,0
+19,Golden Hour,Maya Rae,r&b,romantic,0.65,94,0.82,0.76,0.38,87,2020s,romantic|warm|smooth,0.14,218,0
+20,Island Breeze,Roots & Rhythm,reggae,happy,0.58,88,0.88,0.84,0.52,69,2010s,happy|chill|summer,0.44,256,0
+21,12-Bar Heartbreak,Dusty Rivers,blues,melancholic,0.48,72,0.36,0.50,0.78,55,2000s,melancholic|soulful|raw,0.55,274,0
+22,Circuit City,Polygon Ghost,techno,intense,0.94,138,0.54,0.92,0.02,73,2020s,intense|dark|club,0.10,364,0
+23,Glass Houses,The Pale Echoes,indie rock,melancholic,0.70,108,0.42,0.61,0.44,68,2010s,melancholic|raw|introspective,0.26,247,0
+24,Velvet Rain,Alicia Dune,soul,romantic,0.55,84,0.75,0.68,0.56,80,2020s,romantic|smooth|soulful,0.20,229,0
+25,Funky Parliament,The Groove Unit,funk,happy,0.86,116,0.87,0.93,0.12,74,1990s,happy|groove|dance,0.48,262,0
+26,Rio Afternoons,Café Bossa,bossa nova,relaxed,0.38,82,0.78,0.66,0.85,61,2000s,relaxed|romantic|breezy,0.30,238,0
+27,Crown Up,Lasso Vibe,trap,confident,0.88,142,0.68,0.90,0.06,86,2020s,confident|hype|street,0.08,183,1
+28,Collapse & Bloom,Driftwood Sea,post-rock,melancholic,0.72,104,0.33,0.38,0.60,59,2010s,melancholic|epic|cinematic,0.22,418,0
+29,Midnight Neon,Static Prism,new wave,moody,0.77,122,0.52,0.74,0.15,67,1980s,moody|retro|dark,0.18,233,0
+30,Samba for Two,Marco Vidal,jazz fusion,relaxed,0.62,100,0.72,0.70,0.68,64,2010s,relaxed|sophisticated|groovy,0.52,295,0
