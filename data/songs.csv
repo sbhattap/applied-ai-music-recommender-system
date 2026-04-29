@@ -1,31 +1,181 @@
 id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness,popularity,release_decade,mood_tags,liveness,duration_sec,explicit
-1,Sunrise City,Neon Echo,pop,happy,0.82,118,0.84,0.79,0.18,82,2020s,happy|uplifting|summer,0.12,198,0
-2,Midnight Coding,LoRoom,lofi,chill,0.42,78,0.56,0.62,0.71,74,2020s,chill|study|focus,0.08,214,0
-3,Storm Runner,Voltline,rock,intense,0.91,152,0.48,0.66,0.10,68,2010s,intense|adrenaline|power,0.22,243,0
-4,Library Rain,Paper Lanterns,lofi,chill,0.35,72,0.60,0.58,0.86,71,2020s,chill|rainy|study,0.06,187,0
-5,Gym Hero,Max Pulse,pop,intense,0.93,132,0.77,0.88,0.05,88,2020s,intense|workout|pump,0.10,205,0
-6,Spacewalk Thoughts,Orbit Bloom,ambient,chill,0.28,60,0.65,0.41,0.92,62,2010s,chill|dreamy|spacey,0.04,320,0
-7,Coffee Shop Stories,Slow Stereo,jazz,relaxed,0.37,90,0.71,0.54,0.89,65,2010s,relaxed|cozy|morning,0.35,267,0
-8,Night Drive Loop,Neon Echo,synthwave,moody,0.75,110,0.49,0.73,0.22,79,2020s,moody|nostalgic|drive,0.08,228,0
-9,Focus Flow,LoRoom,lofi,focused,0.40,80,0.59,0.60,0.78,76,2020s,focused|study|calm,0.07,195,0
-10,Rooftop Lights,Indigo Parade,indie pop,happy,0.76,124,0.81,0.82,0.35,72,2010s,happy|indie|carefree,0.18,211,0
-11,Desert Wind,Mesa Sands,country,relaxed,0.55,98,0.74,0.63,0.80,60,2010s,relaxed|open|country,0.28,238,0
-12,Bass Drop Kingdom,Hex Riot,edm,intense,0.97,140,0.66,0.95,0.03,85,2020s,intense|party|euphoric,0.14,194,0
-13,Rainy Seoul,Jisoo Park,k-pop,happy,0.78,120,0.85,0.87,0.14,91,2020s,happy|energetic|cute,0.12,199,0
-14,Copper Cathedral,The Fold,classical,melancholic,0.30,68,0.38,0.22,0.97,58,2010s,melancholic|reflective|dramatic,0.42,312,0
-15,Street Prophet,Comet Kaze,hip-hop,confident,0.80,95,0.62,0.84,0.09,83,2020s,confident|street|bold,0.16,224,1
-16,Tides of Havana,Ruiz Collective,latin,happy,0.85,110,0.90,0.91,0.28,77,2010s,happy|dance|festive,0.32,248,0
-17,Hollow Bones,Ashen Vale,metal,intense,0.95,168,0.32,0.55,0.06,64,2010s,intense|dark|aggressive,0.24,279,0
-18,Porch Swing Lullaby,Clara June,folk,chill,0.33,75,0.76,0.45,0.94,66,2020s,chill|gentle|acoustic,0.38,221,0
-19,Golden Hour,Maya Rae,r&b,romantic,0.65,94,0.82,0.76,0.38,87,2020s,romantic|warm|smooth,0.14,218,0
-20,Island Breeze,Roots & Rhythm,reggae,happy,0.58,88,0.88,0.84,0.52,69,2010s,happy|chill|summer,0.44,256,0
-21,12-Bar Heartbreak,Dusty Rivers,blues,melancholic,0.48,72,0.36,0.50,0.78,55,2000s,melancholic|soulful|raw,0.55,274,0
-22,Circuit City,Polygon Ghost,techno,intense,0.94,138,0.54,0.92,0.02,73,2020s,intense|dark|club,0.10,364,0
-23,Glass Houses,The Pale Echoes,indie rock,melancholic,0.70,108,0.42,0.61,0.44,68,2010s,melancholic|raw|introspective,0.26,247,0
-24,Velvet Rain,Alicia Dune,soul,romantic,0.55,84,0.75,0.68,0.56,80,2020s,romantic|smooth|soulful,0.20,229,0
-25,Funky Parliament,The Groove Unit,funk,happy,0.86,116,0.87,0.93,0.12,74,1990s,happy|groove|dance,0.48,262,0
-26,Rio Afternoons,Café Bossa,bossa nova,relaxed,0.38,82,0.78,0.66,0.85,61,2000s,relaxed|romantic|breezy,0.30,238,0
-27,Crown Up,Lasso Vibe,trap,confident,0.88,142,0.68,0.90,0.06,86,2020s,confident|hype|street,0.08,183,1
-28,Collapse & Bloom,Driftwood Sea,post-rock,melancholic,0.72,104,0.33,0.38,0.60,59,2010s,melancholic|epic|cinematic,0.22,418,0
-29,Midnight Neon,Static Prism,new wave,moody,0.77,122,0.52,0.74,0.15,67,1980s,moody|retro|dark,0.18,233,0
-30,Samba for Two,Marco Vidal,jazz fusion,relaxed,0.62,100,0.72,0.70,0.68,64,2010s,relaxed|sophisticated|groovy,0.52,295,0
+1,Unholy (feat. Kim Petras),"Sam Smith, Kim Petras",pop,melancholic,0.472,131.1,0.238,0.714,0.013,100,unknown,melancholic|moody,0.266,156,0
+2,"Quevedo: Bzrp Music Sessions, Vol. 52","Bizarrap, Quevedo",hip-hop,happy,0.782,128.0,0.55,0.621,0.013,99,unknown,happy|uplifting|energetic,0.23,198,0
+3,La Bachata,Manuel Turizo,latin,happy,0.679,125.0,0.85,0.835,0.583,98,unknown,happy|uplifting|energetic,0.218,162,0
+4,I'm Good (Blue),"David Guetta, Bebe Rexha",edm,intense,0.965,128.0,0.304,0.561,0.004,98,unknown,intense|driving|energetic,0.371,175,1
+5,Me Porto Bonito,"Bad Bunny, Chencho Corleone",latin,intense,0.712,92.0,0.425,0.911,0.09,97,unknown,intense|driving|energetic,0.093,178,1
+6,Tití Me Preguntó,Bad Bunny,latin,intense,0.715,106.7,0.187,0.65,0.099,97,unknown,intense|driving|energetic,0.126,243,0
+7,I Ain't Worried,OneRepublic,pop,happy,0.797,140.0,0.825,0.704,0.083,96,unknown,happy|uplifting|energetic,0.055,148,0
+8,Under The Influence,Chris Brown,pop,intense,0.69,117.0,0.31,0.733,0.064,96,unknown,intense|driving|energetic,0.105,184,1
+9,Efecto,Bad Bunny,latin,melancholic,0.475,98.0,0.234,0.801,0.141,96,unknown,melancholic|moody,0.064,213,0
+10,Ojitos Lindos,"Bad Bunny, Bomba Estéreo",latin,intense,0.686,79.9,0.268,0.647,0.08,95,unknown,intense|driving|energetic,0.528,258,0
+11,As It Was,Harry Styles,pop,happy,0.731,173.9,0.662,0.52,0.342,95,unknown,happy|uplifting|energetic,0.311,167,0
+12,Moscow Mule,Bad Bunny,latin,intense,0.674,100.0,0.292,0.804,0.294,94,unknown,intense|driving|energetic,0.115,245,1
+13,Glimpse of Us,Joji,pop,melancholic,0.317,169.9,0.268,0.44,0.891,94,unknown,melancholic|introspective|somber,0.141,233,0
+14,Neverita,Bad Bunny,latin,chill,0.498,122.0,0.428,0.876,0.071,93,unknown,chill|calm,0.143,173,0
+15,Another Love,Tom Odell,lofi,melancholic,0.537,122.8,0.131,0.445,0.695,93,unknown,melancholic|moody,0.094,244,1
+16,Sweater Weather,The Neighbourhood,pop,intense,0.807,124.1,0.398,0.612,0.05,93,unknown,intense|driving|energetic,0.101,240,0
+17,Super Freaky Girl,Nicki Minaj,hip-hop,happy,0.891,133.0,0.912,0.95,0.065,92,unknown,happy|uplifting|energetic,0.309,170,1
+18,Left and Right (Feat. Jung Kook of BTS),"Charlie Puth, Jung Kook, BTS",pop,happy,0.592,101.1,0.719,0.881,0.619,92,unknown,happy|warm,0.09,154,0
+19,I Wanna Be Yours,Arctic Monkeys,indie,chill,0.417,67.5,0.479,0.464,0.136,92,unknown,chill|calm,0.097,183,0
+20,Calm Down (with Selena Gomez),"Rema, Selena Gomez",pop,happy,0.806,107.0,0.802,0.801,0.382,92,unknown,happy|uplifting|energetic,0.114,239,0
+21,Caile,Luar La L,latin,intense,0.756,121.7,0.461,0.704,0.298,91,unknown,intense|driving|energetic,0.085,141,1
+22,Blinding Lights,The Weeknd,pop,intense,0.73,171.0,0.334,0.514,0.001,91,unknown,intense|driving|energetic,0.09,200,0
+23,Tarot,"Bad Bunny, Jhayco",latin,intense,0.684,114.0,0.419,0.795,0.022,91,unknown,intense|driving|energetic,0.658,237,1
+24,Jimmy Cooks (feat. 21 Savage),"Drake, 21 Savage",hip-hop,intense,0.673,165.9,0.366,0.529,0.0,91,unknown,intense|driving|energetic,0.093,218,1
+25,LOKERA,"Rauw Alejandro, Lyanno, Brray",latin,happy,0.828,102.0,0.58,0.834,0.21,91,unknown,happy|uplifting|energetic,0.103,195,0
+26,"Sex, Drugs, Etc.",Beach Weather,rock,intense,0.839,144.0,0.465,0.572,0.013,90,unknown,intense|driving|energetic,0.522,196,0
+27,Starboy,"The Weeknd, Daft Punk",pop,chill,0.587,186.0,0.486,0.679,0.141,90,unknown,chill|calm,0.137,230,1
+28,Atlantis,Seafret,folk,melancholic,0.479,166.2,0.213,0.4,0.053,90,unknown,melancholic|moody,0.115,229,0
+29,STAR WALKIN' (League of Legends Worlds Anthem),Lil Nas X,hip-hop,intense,0.715,141.9,0.308,0.637,0.148,90,unknown,intense|driving|energetic,0.089,210,1
+30,Party,"Bad Bunny, Rauw Alejandro",reggae,intense,0.799,97.0,0.471,0.829,0.015,90,unknown,intense|driving|energetic,0.242,227,0
+31,La Corriente,"Bad Bunny, Tony Dize",reggae,happy,0.786,196.1,0.579,0.663,0.229,90,unknown,happy|uplifting|energetic,0.219,198,1
+32,I Love You So,The Walters,indie,chill,0.648,76.0,0.466,0.575,0.583,89,unknown,chill|calm,0.115,160,0
+33,Gangsta's Paradise,"Coolio, L.V.",funk,chill,0.514,80.0,0.386,0.647,0.066,89,unknown,chill|calm,0.398,240,0
+34,Bones,Imagine Dragons,rock,happy,0.742,114.1,0.571,0.773,0.021,89,unknown,happy|uplifting|energetic,0.075,165,0
+35,Hold Me Closer,"Elton John, Britney Spears",rock,intense,0.75,126.0,0.486,0.667,0.075,89,unknown,intense|driving|energetic,0.197,202,0
+36,STAY (with Justin Bieber),"The Kid LAROI, Justin Bieber",hip-hop,intense,0.764,169.9,0.478,0.591,0.038,89,unknown,intense|driving|energetic,0.103,141,1
+37,BILLIE EILISH.,Armani White,hip-hop,happy,0.509,100.0,0.765,0.9,0.115,89,unknown,happy|warm,0.094,99,1
+38,WAIT FOR U (feat. Drake & Tems),"Future, Drake, Tems",hip-hop,melancholic,0.642,83.4,0.339,0.463,0.314,89,unknown,melancholic|moody,0.069,189,1
+39,About Damn Time,Lizzo,hip-hop,happy,0.743,109.0,0.722,0.836,0.1,89,unknown,happy|uplifting|energetic,0.335,191,1
+40,Without Me,Eminem,hip-hop,happy,0.669,112.2,0.662,0.908,0.003,88,unknown,happy|uplifting|energetic,0.237,290,1
+41,Where Are You Now,"Lost Frequencies, Calum Scott",edm,melancholic,0.636,121.0,0.262,0.671,0.515,88,unknown,melancholic|moody,0.172,148,0
+42,Mary On A Cross,Ghost,metal,happy,0.9,130.0,0.561,0.466,0.0,88,unknown,happy|uplifting|energetic,0.103,244,0
+43,La Llevo Al Cielo (Ft. Ñengo Flow),"Chris Jedi, Anuel AA, Chencho Corleone, Ñengo Flow",reggae,happy,0.845,170.0,0.769,0.795,0.105,88,unknown,happy|uplifting|energetic,0.172,254,1
+44,Believer,Imagine Dragons,rock,happy,0.78,124.9,0.666,0.776,0.062,88,unknown,happy|uplifting|energetic,0.081,204,0
+45,Why'd You Only Call Me When You're High?,Arctic Monkeys,indie,happy,0.631,92.0,0.8,0.691,0.048,88,unknown,happy|warm,0.104,161,0
+46,No Role Modelz,J. Cole,hip-hop,chill,0.521,100.0,0.494,0.69,0.324,88,unknown,chill|calm,0.053,292,1
+47,Do I Wanna Know?,Arctic Monkeys,indie,chill,0.532,85.0,0.405,0.548,0.186,88,unknown,chill|calm,0.217,272,0
+48,505,Arctic Monkeys,indie,intense,0.866,140.3,0.248,0.526,0.003,88,unknown,intense|driving|energetic,0.095,253,0
+49,After LIKE,IVE,k-pop,happy,0.922,125.0,0.799,0.68,0.103,88,unknown,happy|uplifting|energetic,0.088,176,0
+50,Shut Down,BLACKPINK,k-pop,happy,0.657,110.1,0.651,0.813,0.003,87,unknown,happy|uplifting|energetic,0.183,175,0
+51,Un Ratito,Bad Bunny,reggae,melancholic,0.546,93.0,0.222,0.787,0.305,87,unknown,melancholic|moody,0.122,176,0
+52,Lo Siento BB:/ (with Bad Bunny & Julieta Venegas),"Tainy, Bad Bunny, Julieta Venegas",reggae,intense,0.703,169.9,0.138,0.639,0.089,87,unknown,intense|driving|energetic,0.086,207,0
+53,Yonaguni,Bad Bunny,reggae,chill,0.648,180.0,0.44,0.644,0.276,87,unknown,chill|calm,0.135,206,1
+54,Belly Dancer,"Imanbek, BYOR",edm,intense,0.797,122.0,0.422,0.845,0.058,87,unknown,intense|driving|energetic,0.167,151,0
+55,Numb,"Marshmello, Khalid",edm,happy,0.774,120.0,0.632,0.912,0.121,87,unknown,happy|uplifting|energetic,0.101,155,0
+56,Daddy Issues,The Neighbourhood,rock,melancholic,0.521,85.0,0.337,0.588,0.068,87,unknown,melancholic|moody,0.123,260,0
+57,The Nights,Avicii,edm,happy,0.835,126.0,0.654,0.527,0.017,86,unknown,happy|uplifting|energetic,0.249,176,0
+58,Freaks,Surf Curse,indie,intense,0.941,179.6,0.407,0.345,0.0,86,unknown,intense|driving|energetic,0.051,147,0
+59,Talk that Talk,TWICE,k-pop,happy,0.907,120.0,0.783,0.772,0.136,86,unknown,happy|uplifting|energetic,0.334,177,0
+60,Enemy (with JID) - from the series Arcane League of Legends,"Imagine Dragons, JID, Arcane, League of Legends",rock,happy,0.783,77.0,0.555,0.728,0.237,86,unknown,happy|uplifting|energetic,0.434,173,0
+61,You Proof,Morgan Wallen,country,happy,0.85,119.7,0.644,0.731,0.252,86,unknown,happy|uplifting|energetic,0.605,157,0
+62,Every Breath You Take,The Police,rock,happy,0.452,117.4,0.74,0.82,0.543,86,unknown,happy|warm,0.071,253,0
+63,Softcore,The Neighbourhood,rock,chill,0.568,94.0,0.37,0.575,0.048,86,unknown,chill|calm,0.286,206,0
+64,Beggin',Måneskin,indie,happy,0.8,134.0,0.589,0.714,0.127,86,unknown,happy|uplifting|energetic,0.359,211,0
+65,Thunder,Imagine Dragons,rock,intense,0.822,168.0,0.288,0.605,0.007,85,unknown,intense|driving|energetic,0.147,187,0
+66,Creep,Radiohead,indie,melancholic,0.43,91.8,0.104,0.515,0.01,85,unknown,melancholic|moody,0.129,238,1
+67,Bad Memories (feat. Elley Duhé & FAST BOY),"MEDUZA, James Carter, Elley Duhé, FAST BOY",edm,happy,0.767,124.0,0.662,0.607,0.118,85,unknown,happy|uplifting|energetic,0.122,148,0
+68,Somewhere Only We Know,Keane,rock,intense,0.665,172.0,0.304,0.448,0.06,85,unknown,intense|driving|energetic,0.083,237,0
+69,Wake Me Up,Avicii,edm,happy,0.783,124.1,0.643,0.532,0.004,85,unknown,happy|uplifting|energetic,0.161,247,0
+70,Dynamite,BTS,k-pop,happy,0.765,114.0,0.737,0.746,0.011,85,unknown,happy|uplifting|energetic,0.094,199,0
+71,Pink Venom,BLACKPINK,k-pop,happy,0.719,90.0,0.69,0.794,0.012,85,unknown,happy|uplifting|energetic,0.276,186,0
+72,Yet To Come,BTS,k-pop,happy,0.885,172.0,0.683,0.559,0.043,85,unknown,happy|uplifting|energetic,0.333,193,0
+73,Running Up That Hill (A Deal With God) - 2018 Remaster,Kate Bush,r&b,melancholic,0.533,108.3,0.139,0.625,0.659,85,unknown,melancholic|moody,0.055,300,0
+74,Words (feat. Zara Larsson),"Alesso, Zara Larsson",edm,chill,0.586,124.0,0.444,0.739,0.025,85,unknown,chill|calm,0.308,142,0
+75,MAMIII,"Becky G, KAROL G",reggae,happy,0.7,94.0,0.899,0.843,0.093,85,unknown,happy|uplifting|energetic,0.14,226,0
+76,LOVE DIVE,IVE,k-pop,happy,0.709,117.9,0.538,0.703,0.004,85,unknown,happy|uplifting|energetic,0.333,177,0
+77,In the End,Linkin Park,metal,intense,0.864,105.1,0.4,0.556,0.01,85,unknown,intense|driving|energetic,0.209,216,0
+78,Los Cachos,"Piso 21, Manuel Turizo",reggae,intense,0.73,92.0,0.421,0.774,0.108,85,unknown,intense|driving|energetic,0.194,212,0
+79,Leave Before You Love Me (with Jonas Brothers),"Marshmello, Jonas Brothers",edm,happy,0.738,120.0,0.637,0.721,0.002,85,unknown,happy|uplifting|energetic,0.118,154,0
+80,Something Just Like This,"The Chainsmokers, Coldplay",edm,chill,0.635,103.0,0.446,0.617,0.05,85,unknown,chill|calm,0.164,247,0
+81,THE LONELIEST,Måneskin,indie,melancholic,0.595,129.8,0.237,0.519,0.002,85,unknown,melancholic|moody,0.076,247,0
+82,Rock and A Hard Place,Bailey Zimmerman,country,chill,0.568,122.0,0.394,0.582,0.577,84,unknown,chill|calm,0.105,207,0
+83,La Santa,"Bad Bunny, Daddy Yankee",reggae,happy,0.868,93.0,0.586,0.744,0.033,84,unknown,happy|uplifting|energetic,0.082,206,1
+84,Still D.R.E.,"Dr. Dre, Snoop Dogg",funk,happy,0.775,93.4,0.527,0.816,0.16,84,unknown,happy|uplifting|energetic,0.054,270,1
+85,Run BTS,BTS,k-pop,happy,0.818,77.0,0.696,0.724,0.02,84,unknown,happy|uplifting|energetic,0.036,204,0
+86,Apocalypse,Cigarettes After Sex,ambient,melancholic,0.467,94.5,0.182,0.37,0.021,84,unknown,melancholic|moody,0.109,290,0
+87,Sweet Child O' Mine,Guns N' Roses,metal,happy,0.91,125.1,0.629,0.454,0.087,84,unknown,happy|uplifting|energetic,0.116,354,1
+88,Seven Nation Army,The White Stripes,blues,melancholic,0.446,123.6,0.278,0.743,0.004,84,unknown,melancholic|moody,0.337,232,0
+89,Pumped Up Kicks,Foster The People,indie,happy,0.71,128.0,0.965,0.733,0.145,84,unknown,happy|uplifting|energetic,0.096,239,0
+90,Hotel California - 2013 Remaster,Eagles,country,chill,0.508,147.1,0.609,0.579,0.006,84,unknown,chill|calm,0.058,391,0
+91,Everlong,Foo Fighters,metal,intense,0.881,158.1,0.364,0.413,0.0,84,unknown,intense|driving|energetic,0.081,250,0
+92,Butter,BTS,k-pop,happy,0.459,110.0,0.695,0.759,0.003,83,unknown,happy|warm,0.079,164,0
+93,September,"Earth, Wind & Fire",funk,happy,0.832,125.9,0.979,0.697,0.168,83,unknown,happy|uplifting|energetic,0.269,215,0
+94,Rush Hour (Feat. j-hope of BTS),"Crush, j-hope",k-pop,happy,0.714,95.0,0.74,0.738,0.157,83,unknown,happy|uplifting|energetic,0.31,177,0
+95,Wasted On You,Morgan Wallen,country,intense,0.657,196.0,0.252,0.505,0.373,83,unknown,intense|driving|energetic,0.126,178,0
+96,Numb,Linkin Park,metal,intense,0.863,110.0,0.243,0.496,0.005,83,unknown,intense|driving|energetic,0.639,185,0
+97,Chop Suey!,System Of A Down,metal,intense,0.934,127.1,0.287,0.417,0.0,83,unknown,intense|driving|energetic,0.132,210,0
+98,Besos Moja2,"Wisin & Yandel, ROSALÍA",reggae,happy,0.727,94.0,0.644,0.736,0.058,83,unknown,happy|uplifting|energetic,0.098,229,0
+99,The Night We Met,Lord Huron,folk,melancholic,0.369,87.0,0.102,0.544,0.969,83,unknown,melancholic|introspective|somber,0.639,208,0
+100,Can't Stop,Red Hot Chili Peppers,funk,happy,0.938,91.5,0.875,0.618,0.018,82,unknown,happy|uplifting|energetic,0.167,269,0
+101,Ain't No Mountain High Enough,"Marvin Gaye, Tammi Terrell",funk,happy,0.6,130.0,0.8,0.663,0.43,82,unknown,happy|warm,0.184,151,0
+102,Under the Bridge,Red Hot Chili Peppers,funk,melancholic,0.345,84.6,0.458,0.559,0.058,82,unknown,melancholic|introspective|somber,0.141,264,0
+103,The Kind of Love We Make,Luke Combs,country,intense,0.745,102.0,0.464,0.608,0.023,82,unknown,intense|driving|energetic,0.094,224,0
+104,It Was A Good Day,Ice Cube,funk,happy,0.744,82.4,0.794,0.798,0.33,82,unknown,happy|uplifting|energetic,0.292,260,1
+105,She Had Me At Heads Carolina,Cole Swindell,country,happy,0.912,134.9,0.722,0.607,0.124,82,unknown,happy|uplifting|energetic,0.332,206,0
+106,Riptide,Vance Joy,folk,happy,0.731,101.7,0.51,0.484,0.431,82,unknown,happy|uplifting|energetic,0.151,204,0
+107,The Kids Aren't Alright,The Offspring,metal,happy,0.943,99.6,0.766,0.523,0.007,81,unknown,happy|uplifting|energetic,0.058,180,0
+108,"You're Gonna Go Far, Kid",The Offspring,metal,happy,0.917,126.1,0.601,0.55,0.004,81,unknown,happy|uplifting|energetic,0.197,177,1
+109,Calling My Phone,"Lil Tjay, 6LACK",r&b,melancholic,0.393,104.9,0.202,0.907,0.451,81,unknown,melancholic|introspective|somber,0.135,205,1
+110,Enter Sandman,Metallica,metal,happy,0.828,123.3,0.604,0.577,0.002,81,unknown,happy|uplifting|energetic,0.058,331,0
+111,Can You Feel My Heart,Bring Me The Horizon,metal,intense,0.859,170.5,0.354,0.15,0.002,81,unknown,intense|driving|energetic,0.387,228,1
+112,Whiskey Glasses,Morgan Wallen,country,happy,0.68,150.0,0.707,0.614,0.369,81,unknown,happy|uplifting|energetic,0.115,234,0
+113,Beat the Odds,Lil Tjay,r&b,chill,0.625,84.8,0.478,0.498,0.054,81,unknown,chill|calm,0.175,150,1
+114,Die Young (feat. 347aidan),"Sleepy Hallow, 347aidan",r&b,happy,0.582,77.5,0.675,0.808,0.827,81,unknown,happy|warm,0.111,148,1
+115,2055,Sleepy Hallow,r&b,chill,0.512,80.5,0.638,0.829,0.492,81,unknown,chill|calm,0.12,123,1
+116,The Reason,Hoobastank,funk,intense,0.671,83.0,0.068,0.472,0.013,81,unknown,intense|driving|energetic,0.159,232,0
+117,The Next Episode,"Dr. Dre, Snoop Dogg",funk,intense,0.909,95.3,0.309,0.922,0.028,81,unknown,intense|driving|energetic,0.086,161,1
+118,Hit 'Em Up - Single Version,"2Pac, Outlawz",funk,happy,0.844,95.2,0.586,0.916,0.039,81,unknown,happy|uplifting|energetic,0.078,312,1
+119,Tennessee Whiskey,Chris Stapleton,country,relaxed,0.37,48.7,0.512,0.392,0.205,81,unknown,relaxed|warm|mellow,0.082,293,0
+120,Stand by Me,Ben E. King,r&b,relaxed,0.306,118.1,0.605,0.65,0.57,80,unknown,relaxed|warm|mellow,0.071,180,0
+121,Brown Eyed Girl,Van Morrison,folk,happy,0.583,150.6,0.908,0.491,0.185,80,unknown,happy|warm,0.406,183,0
+122,Beautiful Crazy,Luke Combs,country,chill,0.402,103.3,0.382,0.551,0.676,80,unknown,chill|calm,0.093,193,0
+123,Bitter Sweet Symphony,The Verve,r&b,happy,0.917,171.2,0.518,0.356,0.034,80,unknown,happy|uplifting|energetic,0.406,357,0
+124,NVMD,Denise Julia,lofi,intense,0.674,98.0,0.424,0.758,0.09,79,unknown,intense|driving|energetic,0.09,181,1
+125,In My Head,Lil Tjay,r&b,chill,0.545,143.0,0.407,0.684,0.159,79,unknown,chill|calm,0.102,135,1
+126,Forever After All,Luke Combs,country,intense,0.65,152.0,0.456,0.487,0.191,79,unknown,intense|driving|energetic,0.093,232,0
+127,Budapest,George Ezra,folk,chill,0.455,127.8,0.389,0.717,0.085,79,unknown,chill|calm,0.11,200,0
+128,Vienna,Billy Joel,folk,melancholic,0.495,124.9,0.308,0.532,0.659,79,unknown,melancholic|moody,0.075,214,0
+129,Ophelia,The Lumineers,folk,chill,0.573,76.0,0.566,0.664,0.613,79,unknown,chill|calm,0.086,160,0
+130,Ho Hey,The Lumineers,folk,chill,0.471,79.9,0.421,0.682,0.765,79,unknown,chill|calm,0.091,163,0
+131,Hex,80purppp,lofi,melancholic,0.398,110.0,0.482,0.845,0.872,79,unknown,melancholic|introspective|somber,0.159,122,0
+132,Experience,"Ludovico Einaudi, Daniel Hope, I Virtuosi Italiani",ambient,melancholic,0.449,92.5,0.036,0.447,0.934,79,unknown,melancholic|moody,0.07,315,0
+133,Cigarette Daydreams,Cage The Elephant,blues,intense,0.676,114.0,0.273,0.636,0.081,79,unknown,intense|driving|energetic,0.083,208,0
+134,Uptown Girl,Billy Joel,folk,happy,0.944,129.0,0.792,0.701,0.075,79,unknown,happy|uplifting|energetic,0.601,197,0
+135,California Dreamin' - Single Version,The Mamas & The Papas,folk,chill,0.608,112.4,0.637,0.552,0.352,78,unknown,chill|calm,0.053,162,0
+136,For What It's Worth,Buffalo Springfield,blues,happy,0.519,98.9,0.822,0.653,0.406,78,unknown,happy|warm,0.101,153,0
+137,Sunsetz,Cigarettes After Sex,ambient,melancholic,0.479,75.4,0.131,0.405,0.053,78,unknown,melancholic|moody,0.097,215,0
+138,Run It Up (feat. Offset & Moneybagg Yo),"Lil Tjay, Offset, Moneybagg Yo",r&b,happy,0.575,120.0,0.671,0.88,0.415,78,unknown,happy|warm,0.109,232,1
+139,F.N,Lil Tjay,r&b,melancholic,0.515,120.1,0.321,0.567,0.354,78,unknown,melancholic|moody,0.078,224,1
+140,K.,Cigarettes After Sex,ambient,melancholic,0.4,93.7,0.327,0.454,0.139,78,unknown,melancholic|moody,0.137,320,0
+141,Just the Two of Us (feat. Bill Withers),"Grover Washington, Jr., Bill Withers",jazz,chill,0.497,95.8,0.585,0.749,0.41,77,unknown,chill|calm,0.05,438,0
+142,I See Red,Everybody Loves an Outlaw,blues,melancholic,0.448,156.9,0.221,0.509,0.007,77,unknown,melancholic|moody,0.244,230,0
+143,Free Bird,Lynyrd Skynyrd,blues,intense,0.834,118.2,0.338,0.249,0.074,77,unknown,intense|driving|energetic,0.092,547,0
+144,La Grange - 2005 Remaster,ZZ Top,blues,chill,0.64,80.5,0.606,0.545,0.002,77,unknown,chill|calm,0.196,230,0
+145,All Along the Watchtower,Jimi Hendrix,blues,happy,0.805,113.3,0.564,0.438,0.003,77,unknown,happy|uplifting|energetic,0.084,240,0
+146,"Next Up - S4-E2, Pt. 1","JBee, Mixtape Madness",lofi,chill,0.585,100.3,0.516,0.54,0.198,77,unknown,chill|calm,0.147,120,1
+147,Cry,Cigarettes After Sex,ambient,melancholic,0.399,142.8,0.163,0.406,0.756,76,unknown,melancholic|introspective|somber,0.112,256,0
+148,Losing Interest,"itssvd, Shiloh Dynasty",lofi,relaxed,0.355,111.9,0.506,0.753,0.48,76,unknown,relaxed|warm|mellow,0.122,120,0
+149,Wonderful Tonight,Eric Clapton,blues,melancholic,0.214,95.5,0.485,0.572,0.649,76,unknown,melancholic|introspective|somber,0.125,225,0
+150,Play with Fire (feat. Yacht Money),"Sam Tinnesz, Yacht Money",blues,chill,0.539,75.0,0.39,0.573,0.016,76,unknown,chill|calm,0.105,180,0
+151,Baba O'Riley,The Who,blues,intense,0.724,117.3,0.15,0.489,0.313,76,unknown,intense|driving|energetic,0.287,300,0
+152,Happier Than Ever,ASTN,lofi,melancholic,0.457,97.6,0.266,0.667,0.341,76,unknown,melancholic|moody,0.114,109,1
+153,Boogie Wonderland,"Earth, Wind & Fire, The Emotions",jazz,happy,0.756,131.7,0.963,0.802,0.084,76,unknown,happy|uplifting|energetic,0.052,288,0
+154,Collide (feat. Tyga),"Justine Skye, Tyga",lofi,melancholic,0.31,139.6,0.131,0.418,0.095,75,unknown,melancholic|introspective|somber,0.216,260,1
+155,double take,dhruv,lofi,melancholic,0.437,108.7,0.209,0.456,0.839,75,unknown,melancholic|moody,0.218,171,0
+156,Night Away (Dance) (feat. Tion Wayne),"A1 x J1, Tion Wayne",lofi,happy,0.552,142.0,0.835,0.706,0.235,75,unknown,happy|warm,0.144,175,1
+157,4am,JBee,lofi,chill,0.482,140.0,0.618,0.863,0.621,75,unknown,chill|calm,0.148,193,1
+158,Sweet,Cigarettes After Sex,ambient,melancholic,0.511,96.6,0.115,0.45,0.353,75,unknown,melancholic|moody,0.139,292,0
+159,Anchor,Novo Amor,ambient,melancholic,0.407,117.1,0.126,0.457,0.805,75,unknown,melancholic|moody,0.126,257,0
+160,Sway,Michael Bublé,jazz,happy,0.639,126.0,0.737,0.713,0.753,74,unknown,happy|warm,0.088,188,0
+161,Glue,Bicep,ambient,intense,0.798,130.0,0.42,0.853,0.016,74,unknown,intense|driving|energetic,0.097,269,0
+162,Feeling Good,Michael Bublé,jazz,chill,0.548,115.1,0.477,0.535,0.533,73,unknown,chill|calm,0.123,237,0
+163,What A Wonderful World,Louis Armstrong,jazz,melancholic,0.258,108.2,0.192,0.399,0.792,73,unknown,melancholic|introspective|somber,0.128,137,0
+164,Sunrise,Norah Jones,jazz,relaxed,0.299,156.8,0.679,0.526,0.941,73,unknown,relaxed|warm|mellow,0.106,200,0
+165,State Lines,Novo Amor,ambient,melancholic,0.31,137.5,0.151,0.509,0.959,73,unknown,melancholic|introspective|somber,0.096,208,0
+166,You Are Enough,Sleeping At Last,ambient,chill,0.5,118.0,0.465,0.593,0.707,73,unknown,chill|calm,0.084,180,0
+167,Haven't Met You Yet,Michael Bublé,jazz,happy,0.733,122.6,0.796,0.615,0.152,72,unknown,happy|uplifting|energetic,0.109,244,0
+168,Time Moves Slow,"BADBADNOTGOOD, Samuel T. Herring",jazz,melancholic,0.376,140.0,0.308,0.591,0.478,71,unknown,melancholic|introspective|somber,0.101,273,0
+169,Everything,Michael Bublé,jazz,intense,0.688,123.1,0.493,0.686,0.39,71,unknown,intense|driving|energetic,0.092,212,0
+170,I Just Couldn't Save You Tonight (feat. Aurélie) - Story of Kale - Original Motion Picture Soundtrack,"Ardhito Pramono, Aurélie",jazz,melancholic,0.322,85.1,0.152,0.372,0.851,71,unknown,melancholic|introspective|somber,0.108,219,0
+171,River Flows In You,Yiruma,classical,melancholic,0.22,145.2,0.116,0.315,0.987,71,unknown,melancholic|introspective|somber,0.08,188,0
+172,Gymnopédie No. 1,"Erik Satie, Philippe Entremont",classical,melancholic,0.013,72.8,0.356,0.468,0.994,70,unknown,melancholic|introspective|somber,0.094,205,0
+173,"The Carnival of the Animals, R. 125: XIII. The Swan (Arr. for Cello and Piano)","Camille Saint-Saëns, Yo-Yo Ma, Kathryn Stott",classical,melancholic,0.016,128.1,0.057,0.169,0.986,70,unknown,melancholic|introspective|somber,0.081,174,0
+174,Nowesind,Jacob David,classical,melancholic,0.09,114.5,0.318,0.304,0.903,70,unknown,melancholic|introspective|somber,0.111,119,0
+175,"Cello Suite No. 1 in G Major, BWV 1007: I. Prélude","Johann Sebastian Bach, Yo-Yo Ma",classical,melancholic,0.157,73.3,0.304,0.275,0.89,69,unknown,melancholic|introspective|somber,0.186,152,0
+176,"Sonata No. 14 ""Moonlight"" in C-Sharp Minor"", Op. 27 No. 2: I. Adagio sostenuto","Ludwig van Beethoven, Paul Lewis",classical,melancholic,0.005,170.6,0.151,0.184,0.995,69,unknown,melancholic|introspective|somber,0.173,315,0
+177,Vaseegara,Bombay Jayashri,classical,relaxed,0.293,143.8,0.637,0.695,0.596,68,unknown,relaxed|warm|mellow,0.132,299,0
+178,Merry-Go-Round of Life - from 'Howl's Moving Castle',Joe Hisaishi,classical,melancholic,0.287,71.6,0.185,0.239,0.876,68,unknown,melancholic|introspective|somber,0.122,311,0
+179,"Clair de Lune, L. 32","Claude Debussy, Martin Jones",classical,melancholic,0.005,65.8,0.04,0.335,0.994,68,unknown,melancholic|introspective|somber,0.062,268,0
+180,"Nocturne No. 2 in E-Flat Major, Op. 9 No. 2","Frédéric Chopin, Daniel Barenboim",classical,melancholic,0.009,79.3,0.093,0.442,0.984,67,unknown,melancholic|introspective|somber,0.087,273,0

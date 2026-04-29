@@ -108,22 +108,34 @@ Real-world recommenders like Spotify or Apple Music typically combine two strate
 2. Install dependencies:
 
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
-3. Run the simulation:
+3. Run the agentic CLI recommender:
 
    ```bash
-   python -m src.main
+   python -m src.recommender.main --query "chill study music, no vocals"
    ```
 
-4. **Save output to a styled HTML file** (opens in any browser):
+4. Run the Streamlit demo app:
 
    ```bash
-   python -m src.main -o results.html
+   streamlit run streamlit_app.py
    ```
 
-   Output streams to the terminal in real-time and is also saved. To switch the active ranking strategy, change `ACTIVE_STRATEGY` in `src/main.py` to `"genre_first"`, `"mood_first"`, or `"energy_similarity"`.
+5. Run the deterministic baseline demo:
+
+   ```bash
+   python scripts/baseline_demo.py
+   ```
+
+   To export the baseline demo to HTML:
+
+   ```bash
+   python scripts/baseline_demo.py -o results.html
+   ```
+
+   To switch the active ranking strategy, change `ACTIVE_STRATEGY` in `scripts/baseline_demo.py` to `"genre_first"`, `"mood_first"`, or `"energy_similarity"`.
 
 ### Running Tests
 

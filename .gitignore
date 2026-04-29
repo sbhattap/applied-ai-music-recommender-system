@@ -13,3 +13,29 @@ venv/
 
 # Pytest cache
 .pytest_cache/
+
+# Packaging artifacts
+*.egg-info/
+build/
+dist/
+
+# Streamlit
+.streamlit/
+.streamlit/secrets.toml
+
+# Logs
+logs/
+
+# Notebook / tool caches
+.ipynb_checkpoints/
+.mypy_cache/
+.ruff_cache/
+
+# Project spec
+project_req.md
+for_me.md
+
+# Local env and OAuth caches
+.env
+.spotify_tokens.json
+import_spotify_playlist.py
