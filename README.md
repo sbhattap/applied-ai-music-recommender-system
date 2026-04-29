@@ -1,249 +1,238 @@
-# 🎵 Music Recommender Simulation
+# Applied AI Music Recommender System
 
-## Project Summary
+This project extends my rule-based deterministic music recommender into an agentic music recommender that accepts free-text requests, retrieves candidate songs, checks whether the results make sense, and then explains the final recommendations. It matters because it turns a transparent but rigid rule-based recommender into a more realistic AI workflow: the user can ask for a vibe in natural language, while the system still keeps its reasoning observable and its ranking reproducible.
 
-In this project you will build and explain a small music recommender system.
+The original project was a deterministic content-based recommender built around `Song`, `UserProfile`, and a weighted scoring function. Given a structured profile, it ranked songs by genre, mood, energy, acousticness, danceability, valence, and popularity. This extension keeps that ranking backbone, but adds an LLM-driven agent so the system can plan from free text, choose a retrieval strategy, evaluate candidate quality, and generate user-facing explanations.
 
-Your goal is to:
+## New Additions
 
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
+- It adds a substantial new AI feature: an agentic workflow with `plan -> act -> check -> respond`.
+- It keeps the deterministic scorer from the original project as the final ranking authority.
+- It exposes intermediate reasoning through trace logs, confidence scores, flags, and the Streamlit UI.
+- It includes reliability mechanisms instead of treating the model output as automatically correct.
 
-This simulation uses a content-based recommender that scores every song in `data/songs.csv` against a user taste profile and returns the top-K results with diversity capping. The scoring formula combines seven weighted signals — genre, mood (with soft tag matching), energy, acousticness, danceability, valence, and popularity — so that recommendations reflect both the feel of the music and the user's mainstream vs. niche preference. Two implementations run in parallel: a clean OOP interface (`Recommender`) used by tests, and a functional interface (`recommend_songs`) used by the runner that also supports custom weight experiments.
+## Architecture Overview
 
----
+The system has two entry points: a CLI and a Streamlit app. Both send a free-text query and a listener profile into the same backend pipeline.
 
-## How The System Works
-
-Explain your design in plain language.
-
-Some prompts to answer:
-
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
-
-Real-world recommenders like Spotify or Apple Music typically combine two strategies: collaborative filtering, which finds patterns across millions of users to surface songs that people with similar taste have enjoyed, and content-based filtering, which looks directly at the features of a song — genre, energy, mood, tempo — and matches them to a user's stated preferences. Collaborative filtering is powerful but requires a lot of behavioral data (which we initially did not begin with) to work well; without it, new users and new songs get stuck in a cold-start problem where the system has nothing to go on. For this simulation, I prioritized content-based filtering because my dataset is small (30 songs) and there is no user interaction history to learn from. My recommender scores each song against a user profile using weighted audio features — giving the most weight to energy proximity and mood match, which tend to cross genre boundaries — and applies a light diversity cap so the results don't collapse into a single genre. This keeps the system transparent and explainable, even if it lacks the discovery power that a collaborative approach would bring at scale.
-
-**Song features used in scoring:**
-
-| Feature | Type | Description |
-|---|---|---|
-| `genre` | categorical | Musical genre (e.g. pop, lofi, rock) — exact match against user's favorite |
-| `mood` | categorical | Primary emotional tone — full credit for exact match, half credit for tag match |
-| `mood_tags` | pipe-separated string | Extended mood tags (e.g. `"happy\|uplifting\|summer"`) — enables soft mood matching |
-| `energy` | float 0–1 | Intensity and activity level — scored by proximity to user's target |
-| `valence` | float 0–1 | Musical positiveness — scored by proximity to user's `target_valence` |
-| `danceability` | float 0–1 | How suitable the track is for dancing |
-| `acousticness` | float 0–1 | How acoustic vs. produced the track sounds — matched against user's acoustic preference |
-| `popularity` | int 0–100 | Chart popularity — rewarded or penalized based on user's `prefer_popular` setting |
-
-`tempo_bpm`, `liveness`, `duration_sec`, `explicit`, and `release_decade` are stored on each `Song` object but not used in the current scoring formula.
-
-**UserProfile fields:**
-
-| Field | Type | Description |
-|---|---|---|
-| `favorite_genre` | string | The genre the user most wants to hear |
-| `favorite_mood` | string | The mood or vibe the user is looking for |
-| `target_energy` | float 0–1 | The energy level the user wants — songs close to this score higher |
-| `likes_acoustic` | bool | Whether the user prefers acoustic tracks over produced/electronic ones |
-| `target_valence` | float 0–1 | Preferred emotional positiveness: 0 = darker/sadder, 1 = upbeat (default 0.5) |
-| `prefer_popular` | bool | `True` rewards mainstream tracks; `False` rewards niche/underground picks (default `True`) |
-
-**Demo output:**
-
-<img src="docs/recs.png" width="600" alt="Sample recommendation output">
-
----
-
-## Algorithm Recipe
-
-1. **Collect inputs** — Read the user's taste profile (`favorite_genre`, `favorite_mood`, `target_energy`, `likes_acoustic`, `target_valence`, `prefer_popular`) and load every song from `data/songs.csv`.
-
-2. **Select a ranking strategy** — Choose `ACTIVE_STRATEGY` in `main.py` to control which signal dominates. Three named presets are available:
-
-   | Strategy | Dominant signal | Intent |
-   |---|---|---|
-   | `genre_first` | genre 50% | Stay within the user's preferred genre above all else |
-   | `mood_first` | mood 50% | Match the user's vibe regardless of genre label |
-   | `energy_similarity` | energy 55% | Find the closest audio feel regardless of labels |
-
-   Or use the balanced `ORIGINAL_WEIGHTS` (all signals share the load) as the comparison baseline.
-
-3. **Loop over every song** — For each song in the catalog, compute a weighted score using seven signals:
-
-   | Signal | Default weight | How it's calculated |
-   |---|---|---|
-   | Energy proximity | 25% | `1 - abs(song.energy - target_energy)` |
-   | Genre match | 20% | 1.0 if exact match, else 0.0 |
-   | Mood match | 15% | 1.0 primary · 0.5 tag match · 0.0 no match |
-   | Valence proximity | 12% | `1 - abs(song.valence - target_valence)` |
-   | Acousticness fit | 12% | `song.acousticness` if acoustic preferred, else `1 - song.acousticness` |
-   | Danceability | 8% | Raw danceability value of the song |
-   | Popularity fit | 8% | Normalized popularity (inverted if `prefer_popular=False`) |
-
-4. **Sort descending** — Rank all songs from highest score to lowest.
-
-5. **Apply diversity filter** — Walk the sorted list and skip any song whose genre already has 2 representatives in the result set. This prevents the top-K from collapsing into a single genre.
-
-6. **Return Top-K** — Stop once K songs have been collected. Return each song with its numeric score and a bullet-point explanation of why it was chosen, displayed as a formatted table.
-
----
-
-## Getting Started
-
-### Setup
-
-1. Create a virtual environment (optional but recommended):
-
-   ```bash
-   source .venv/Scripts/activate         # Windows (Git Bash)
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pip install -e .
-   ```
-
-3. Run the agentic CLI recommender:
-
-   ```bash
-   python -m src.recommender.main --query "chill study music, no vocals"
-   ```
-
-4. Run the Streamlit demo app:
-
-   ```bash
-   streamlit run streamlit_app.py
-   ```
-
-5. Run the deterministic baseline demo:
-
-   ```bash
-   python scripts/baseline_demo.py
-   ```
-
-   To export the baseline demo to HTML:
-
-   ```bash
-   python scripts/baseline_demo.py -o results.html
-   ```
-
-   To switch the active ranking strategy, change `ACTIVE_STRATEGY` in `scripts/baseline_demo.py` to `"genre_first"`, `"mood_first"`, or `"energy_similarity"`.
-
-### Running Tests
-
-Run the starter tests with:
-
-```bash
-pytest
+```text
+User query + listener profile
+            |
+            v
+      [Agent: PLAN]
+      Extract intent, filters,
+      expected result shape,
+      and retrieval tool
+            |
+            v
+   +--------+---------+----------------+
+   |                  |                |
+   v                  v                v
+[structured]      [semantic]       [hybrid]
+[filter]          [search]         [search]
+   \                  |                /
+    \                 |               /
+     +----------------+--------------+
+                      |
+                      v
+               Candidate songs
+                      |
+                      v
+              [Agent: CHECK]
+        Confidence score + flags:
+        looks_good / low_result_count /
+        constraint_violated / intent_mismatch
+                      |
+                      v
+         [Deterministic re-ranker]
+      7-signal recommendation scoring
+                      |
+                      v
+             [Agent: EXPLAIN]
+                      |
+                      v
+     CLI output / Streamlit cards / trace panel
 ```
 
-You can add more tests in `tests/test_recommender.py`.
+In plain language: the LLM is responsible for understanding the request, deciding how to search, judging whether the retrieved songs fit the request, and narrating the results. The final ordering still comes from the rule-based recommender, which makes the ranking easier to debug and test.
 
----
+## Design Decisions
 
-## Experiments You Tried
+- I kept the original scorer as the source of truth. This trades some flexibility for reproducibility and easier testing.
+- I used three retrieval modes: `structured_filter`, `semantic_search`, and `hybrid`. This lets the agent handle both clear constraints and fuzzier vibe-based requests.
+- I added a check step with confidence and flags instead of trusting retrieval blindly. This improves observability and gives the UI a way to surface uncertainty.
+- I capped the refine loop so the agent can broaden or switch strategies without turning one user request into an unbounded chain of retries.
+- I did not add a vector database or multi-source RAG because the song catalog is small enough that simpler retrieval strategies are easier to explain and maintain.
 
-### Experiment 1 — Three distinct normal user profiles
+The main trade-off is that the system is more capable on free-text requests, but it also depends on API availability and prompt quality. The deterministic baseline is simpler and cheaper; the agentic version is more expressive and more realistic.
 
-Three profiles were designed to represent clearly different listener types and run through the recommender.
+## Setup Instructions
 
-| Profile | Key preferences | Top result | Score |
-|---|---|---|---|
-| High-Energy Pop | genre=pop, mood=happy, energy=0.88, non-acoustic | Sunrise City | 0.8914 |
-| Chill Lofi | genre=lofi, mood=chill, energy=0.38, acoustic | Library Rain | 0.9069 |
-| Deep Intense Rock | genre=rock, mood=intense, energy=0.91, non-acoustic | Storm Runner | 0.9328 |
+### Prerequisites
 
-**Findings:**
-- When a profile's genre, mood, and energy all agreed with a song in the catalog, the top result scored very high (above 0.90). The system worked exactly as expected for "well-defined" users.
-- The diversity cap (max 2 songs per genre) had a visible effect on Chill Lofi: both lofi slots filled immediately, so slots 3–5 were pulled from ambient and jazz — which happened to share the acoustic and low-energy traits but not the exact genre.
-- Deep Intense Rock had only one rock song in the catalog ("Storm Runner"), so after rank 1 the recommender fell back on mood=intense and high energy from other genres (pop, synthwave). The genre label mattered less than the feel of the music.
+- Python 3.12+
+- A Gemini API key stored as `GEMINI_API_KEY`
 
-<img src="docs/high-energy%20pop.png" width="520" alt="High-Energy Pop recommendations output">
+### Installation
 
-<img src="docs/chill%20lofi.png" width="520" alt="Chill Lofi recommendations output">
+1. Clone the repository and enter the project folder.
+2. Create a virtual environment:
 
-<img src="docs/deep%20intense%20rock.png" width="520" alt="Deep Intense Rock recommendations output">
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
----
+3. Install dependencies:
 
-### Experiment 2 — Three adversarial / edge-case user profiles
+```powershell
+pip install -e .
+```
 
-These profiles were designed to expose weaknesses in the scoring logic by giving the algorithm conflicting or impossible signals.
+4. Create a `.env` file in the project root:
 
-**Profile A — Conflicting Energy + Mood** (`energy=0.9`, `mood=melancholic`, `genre=classical`, `likes_acoustic=True`)
+```env
+GEMINI_API_KEY=your_key_here
+```
 
-The user wants high-intensity music but a sad emotional tone. No song in the catalog is both high-energy and melancholic.
-- The one truly melancholic song, "Copper Cathedral" (classical, energy=0.30), never appeared in the top 5. Its mood matched but its energy was so far from 0.9 that the 30% energy weight buried it completely.
-- All five results scored between 0.361 and 0.393 — an unusually tight band. When signals conflict, the algorithm has no clear winner and produces a flat, undifferentiated ranking.
-- **Takeaway:** The scoring function cannot balance opposing preferences. It simply averages the signals and returns whatever is "least wrong," which may not be what the user actually wants.
+5. Optional configuration:
 
-<img src="docs/adversarial.png" width="520" alt="Conflicting Energy + Mood adversarial profile output">
+```env
+RECOMMENDER_MODEL=gemini-3-flash-preview
+RECOMMENDER_EFFORT=medium
+```
 
-**Profile B — Acoustic EDM Contradiction** (`genre=edm`, `energy=0.97`, `likes_acoustic=True`)
+### Run The App
 
-The only EDM track in the catalog, "Bass Drop Kingdom," has acousticness=0.03. Asking for EDM but acoustic is internally contradictory.
-- "Bass Drop Kingdom" never appeared in the top 5 at all, despite being the only genre match. Its 25% genre-match bonus was wiped out by the 15% acousticness penalty (0.03 × 0.15 ≈ 0.004 vs 0.97 × 0.15 ≈ 0.145 for an acoustic track).
-- The recommender quietly ignored the user's stated genre and surfaced pop and rock songs instead.
-- **Takeaway:** The system has no way to tell the user "your preferences are contradictory." It silently returns the best partial match, which could look wrong or confusing to a real user.
+Start the Streamlit UI:
 
-**Profile C — No Exact Match in Catalog** (`genre=jazz`, `mood=happy`, `energy=0.9`, `likes_acoustic=False`)
+```powershell
+streamlit run streamlit_app.py
+```
 
-The one jazz track in the catalog ("Coffee Shop Stories") has mood=relaxed and energy=0.37 — almost the opposite of what this profile asks for.
-- The jazz track appeared at rank 5 with a score of 0.46, solely because of the 25% genre bonus.
-- Ranks 1–4 were all non-jazz songs (pop, indie pop) that better matched mood=happy and energy=0.9.
-- **Takeaway:** When genre is a user's stated preference but no song in the catalog delivers on that genre's other traits, the system deprioritizes genre in practice, even though genre carries 25% weight. The 30% energy weight is strong enough to override a genre match if the energy gap is large.
+Run the CLI version:
 
----
+```powershell
+python -m src.recommender.main --query "chill study music, no vocals" --profile chill_lofi
+```
 
-### Experiment 3 — Named ranking strategies
+Useful CLI options:
 
-Three named strategies were introduced to make weight-shifting explicit and intentional. Each gives one signal a dominant share so the output reflects a clear listening intent rather than a balanced average. `ACTIVE_STRATEGY` in `main.py` switches the right-column output.
+- `--k 5` to control how many recommendations are returned
+- `--no-llm-explainer` to use the templated fallback explanation
+- `--songs data/songs.csv` to point at a different catalog file
 
-| Signal | Default weights | `genre_first` | `mood_first` | `energy_similarity` |
-|---|---|---|---|---|
-| Genre match | 20% | **50%** | 8% | 3% |
-| Mood match | 15% | 20% | **50%** | 5% |
-| Energy proximity | 25% | 15% | 20% | **55%** |
-| Acousticness fit | 12% | 7% | 8% | 15% |
-| Danceability | 8% | 4% | 5% | 12% |
-| Valence proximity | 12% | 3% | 7% | 8% |
-| Popularity fit | 8% | 1% | 2% | 2% |
+### Run Tests
 
-Each run displays results as formatted tables with per-song bullet-point explanations.
+The current test suite passes with:
 
-**What changed for normal profiles:**
-- Rank order was completely stable for all three normal profiles. "Sunrise City," "Library Rain," and "Storm Runner" stayed at #1.
-- This happened because, for these profiles, the best song on energy also happened to be the best song on genre. Shifting weight between two signals that agreed didn't change anything.
+```powershell
+$env:PYTHONPATH='.'
+pytest -p no:cacheprovider
+```
 
-**What changed for adversarial profiles:**
-- **Conflicting Energy + Mood:** The ranking reshuffled significantly. "Gym Hero" (energy=0.93) jumped to #1 over "Rooftop Lights," and "Storm Runner" moved to #2. With energy worth 60%, the algorithm leaned even harder into intensity and ignored the melancholic mood preference almost entirely.
-- **Acoustic EDM Contradiction:** Slots 3 and 4 swapped. "Sunrise City" (energy=0.82) overtook "Rooftop Lights" (energy=0.76) because the larger energy weight made the 0.06 energy difference more decisive.
-- **No Exact Match:** The most notable change — "Coffee Shop Stories" (the only jazz track, energy=0.37) dropped out of the top 5 entirely. Its genre bonus (now only 12.5%) was no longer enough to compensate for its very low energy. A synthwave track with higher energy took its slot.
+This runs the offline test suite with mocked LLM calls and avoids the current `src.recommender` import-path issue that appears with plain `pytest`.
 
-**Overall conclusion:** Halving genre and doubling energy made the system more "vibe-driven" and less "genre-loyal." For well-matched profiles the result looked the same. For conflicted or mismatched profiles, the stronger energy weight amplified existing problems — the algorithm became even more dominated by one signal and even less able to respect categorical preferences like mood and genre.
+## Sample Interactions
 
----
+These examples show the current system behavior on the repository's song catalog. They illustrate both successful matches and one guardrail case.
 
-## Limitations and Risks
+### 1. Workout Pop
 
-The catalog contains 30 songs across 27 genres, but most genres still have only one or two representatives — a user asking for jazz gets one jazz option, and if that song's other traits don't match, the recommender quietly substitutes songs from unrelated genres without any warning. The scoring formula treats all seven features as independent and combines them with fixed weights, so it cannot detect or flag contradictory preferences (like wanting high energy and a melancholic mood at the same time) — it simply averages the conflicting signals and returns whatever is "least wrong." The `prefer_popular` field defaults to `True`, which means every scoring run gives a quiet advantage to chart-popular songs unless the user explicitly opts out — a subtle mainstream bias baked into the defaults. Several loaded fields (`tempo_bpm`, `liveness`, `duration_sec`, `explicit`, `release_decade`) carry zero weight in scoring, so two songs with very different tempos or live vs. studio feels are still treated identically. Because there is no user interaction history, the system cannot learn or improve over time; it will give the same recommendations to two users with identical profiles even if one of them consistently skips every pop song it surfaces.
+**Input**
 
----
+- Query: `upbeat pop for a workout`
+- Profile: `High-Energy Pop`
+
+**Output**
+
+- `I Ain't Worried` by OneRepublic
+  Recommended because it's pop, matches the happy mood, and its energy is close to the target.
+- `Calm Down (with Selena Gomez)` by Rema, Selena Gomez
+  Recommended because it's pop, matches the happy mood, and stays close to the target energy.
+- Agent check: `looks_good`
+- Confidence: `0.84`
+
+### 2. Intense Night Listening
+
+**Input**
+
+- Query: `intense late-night rock`
+- Profile: `Deep Intense Rock`
+
+**Output**
+
+- `Sex, Drugs, Etc.` by Beach Weather
+  Strong match on genre, mood, energy, and non-acoustic sound.
+- `Hold Me Closer` by Elton John, Britney Spears
+  Strong match on genre, mood, and overall production feel.
+- `The Next Episode` by Dr. Dre, Snoop Dogg
+  Lower-ranked fallback that still matches the intense, high-energy request.
+- Agent check: `looks_good`
+- Confidence: `0.79`
+
+### 3. Guardrail Example
+
+**Input**
+
+- Query: `songs from a fake genre`
+- Profile: `Chill Lofi`
+
+**Output**
+
+- No recommendations returned
+- Agent check: `low_result_count`
+- Confidence: `0.00`
+- System behavior: the pipeline synthesizes a low-confidence verdict instead of pretending the result is valid
+
+## Reliability And Testing Summary
+
+This project includes several reliability mechanisms required by the rubric:
+
+- Automated tests for the deterministic recommender, retrieval tools, explainer behavior, and agent loop
+- Confidence scoring and issue flags from the `check` step
+- Structured logging for LLM calls in `logs/llm_calls.jsonl`
+- Error handling and fallback explanations when the LLM is unavailable
+
+Current test result:
+
+- `24/24` tests passed with `$env:PYTHONPATH='.'; pytest -p no:cacheprovider`
+
+What worked:
+
+- The mocked end-to-end agent tests passed, including plan, act, check, respond, and refine behavior.
+- The deterministic scorer still produces stable rankings after the AI layer was added.
+- The explainer fallback keeps the app usable even if the LLM call fails.
+
+What did not work cleanly:
+
+- Plain `pytest` currently fails during test collection because the tests import `src.recommender`.
+- The live agent path depends on a valid Gemini API key, so full online runs are not completely offline-reproducible.
+- Very narrow or contradictory constraints can still produce sparse candidate sets.
+
+What I learned:
+
+- Reliability features are not optional extras in AI systems; they are part of the product.
+- A small deterministic core paired with an LLM orchestration layer is easier to evaluate than an all-LLM recommender.
+- Surfacing uncertainty helps users trust the system more than hiding failure states.
 
 ## Reflection
 
-[**Model Card**](model_card.md)
+This project taught me that building with AI is less about asking a model for an answer and more about designing a workflow around uncertainty. The most important shift from the earlier modules was not just "adding an LLM," but deciding where the model should have freedom and where the system should stay deterministic. Letting the agent interpret free-text intent was valuable; letting it control the final ranking would have made the system much harder to debug and justify.
 
-Building this simulation made it clear how much hidden complexity sits inside a seemingly simple scoring formula. Even with only five features and ten songs, small decisions — like giving energy 30% of the weight or capping genre diversity at two — produced results that were sometimes counterintuitive: a user who asked for jazz ended up with mostly pop, and a user who wanted melancholic music got nothing but high-energy tracks. Those surprises showed that a recommender does not "understand" preferences — it just finds the least-bad numerical compromise, and the outcome depends heavily on how the designer chose to weight the signals.
+It also highlighted the limitations and biases of small recommendation systems. The catalog is limited, so some genres or moods are underrepresented. That means the agent can understand a request correctly and still fail to satisfy it because the data is weak. The system could also be misused if someone assumed the recommendations were personalized at Spotify-scale; to reduce that risk, I expose the trace, the confidence score, and the recommendation rationale instead of presenting the output as magically authoritative.
 
-The adversarial profiles in particular revealed where bias could creep into a real product. If the scoring formula overweights energy — as it did after the weight-shift experiment — the system becomes less responsive to mood and genre, effectively flattening the diversity of recommendations toward whatever audio features dominate the catalog. In a real app serving millions of users, that kind of structural bias could push certain genres or emotional tones to the margins, not because those users are rare but because the formula was never calibrated for them. That is why human judgment still matters even when a model looks "smart": someone has to decide what the weights mean, whose listening habits the catalog reflects, and when a recommendation that scores well numerically is still the wrong answer for the person receiving it.
+My collaboration with AI during development was useful but not flawless. One helpful suggestion was separating the workflow into plan, check, and explain stages while keeping the original rule-based scorer in charge of ranking; that made the system much easier to test. One flawed suggestion was an earlier configuration path that pointed at the wrong provider-style setup, which would have sent the project toward mismatched environment-variable and model assumptions. Correcting that reinforced an important lesson: AI can accelerate design and debugging, but it still needs human review, especially around architecture and integration details.
 
----
+## Future Improvements
+
+- Fix the test import path so plain `pytest` works without setting `PYTHONPATH`
+- Add a formal evaluation harness with saved benchmark queries and quality metrics
+- Add a portfolio demo video link and a cleaner architecture image for recruiters
+- Expand the song catalog so the agent has better coverage for niche tastes
+
+## Portfolio Notes
+
+- GitHub repository: https://github.com/sunitab55/applied-ai-music-recommender-system
+- Loom walkthrough: add your Loom link here when the demo video is ready
+- What this project says about me as an AI engineer: I care about building AI systems that are inspectable, testable, and honest about uncertainty rather than just impressive at first glance.
