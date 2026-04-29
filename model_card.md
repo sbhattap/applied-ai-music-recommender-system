@@ -1,141 +1,263 @@
-# Model Card: Music Recommender Simulation
+# Model Card: Applied AI Music Recommender System
 
 ## 1. Model Name
 
-**MoodMusical 1.5**
+**Applied AI Music Recommender System**
 
----
+This project is a hybrid system rather than a single standalone model. It combines:
+
+- a deterministic content-based music recommender
+- an LLM-driven planning and checking layer
+- an LLM-based explanation layer
 
 ## 2. Intended Use
 
-MoodMusical 1.5 generates personalized song recommendations based on a listener's genre preference, mood, desired energy level, acoustic preference, emotional tone (valence), and mainstream vs. niche taste. It is designed for classroom exploration of how content-based filtering works — not for production deployment. The system assumes each user can be described by a fixed preference vector and that those preferences are stable across a session.
+This system is designed for educational and portfolio use. It takes a free-text music request plus a listener profile and returns ranked recommendations with an observable agent trace. The main goal is to demonstrate how an AI workflow can sit on top of a traditional recommendation engine without hiding how decisions are made.
 
----
+It is appropriate for:
 
-## 3. How the Model Works
+- demonstrating agentic workflows
+- showing human-readable recommendation reasoning
+- exploring retrieval strategy selection
+- comparing deterministic ranking with LLM-assisted orchestration
 
-Each song in the catalog has seven scored attributes: genre, mood, energy (intensity, 0–1), danceability (groove-friendliness, 0–1), acousticness (how "unplugged" it sounds, 0–1), valence (musical positiveness, 0–1), and popularity (chart presence, 0–100 normalized to 0–1).
+It is not intended for:
 
-**User profile fields:**
+- production-grade personalization
+- large-scale music recommendation
+- fully automated trust without human review
+- safety-critical or rights-sensitive decision-making
+
+## 3. System Overview
+
+The system has two major layers.
+
+### Deterministic ranking layer
+
+The original recommender takes a structured listener profile and scores songs using seven signals:
+
+- genre match
+- mood match
+- energy proximity
+- acousticness fit
+- danceability
+- valence proximity
+- popularity fit
+
+After scoring, it applies a diversity cap of at most two songs per genre and returns the top `k` songs.
+
+### LLM orchestration layer
+
+The extended system accepts a free-text request and runs a four-step loop:
+
+1. `PLAN`: interpret the request, extract constraints, choose a retrieval tool, and estimate expected result count
+2. `ACT`: run `structured_filter`, `semantic_search`, or `hybrid`
+3. `CHECK`: assign a confidence score and flags to the candidate set
+4. `RESPOND`: re-rank with the deterministic scorer and generate explanation text
+
+If a candidate set looks weak, the system can refine the plan and retry with broader constraints or a different retrieval strategy.
+
+## 4. Inputs And Outputs
+
+### Inputs
+
+The system uses two kinds of input.
+
+**User query**
+
+- free-text text such as `chill study music, no vocals`
+
+
+**Listener profile**
 
 | Field | Type | Description |
 |---|---|---|
-| `favorite_genre` | string | The genre the user most wants to hear |
-| `favorite_mood` | string | The mood or vibe the user is looking for |
-| `target_energy` | float 0–1 | Preferred intensity level |
-| `likes_acoustic` | bool | Acoustic vs. produced/electronic preference |
-| `target_valence` | float 0–1 | Emotional tone: 0 = darker/sadder, 1 = upbeat/positive (default 0.5) |
-| `prefer_popular` | bool | Mainstream taste vs. underground/niche (default True) |
+| `genre` | string | preferred genre |
+| `mood` | string | target mood |
+| `energy` | float 0-1 | preferred energy level |
+| `likes_acoustic` | bool | acoustic vs. produced sound preference |
+| `target_valence` | float 0-1 | preferred emotional tone |
+| `prefer_popular` | bool | mainstream vs. niche preference |
 
-**Default scoring weights:**
+### Outputs
 
-| Signal | Weight | How it's calculated |
+- ranked recommendations
+- deterministic score per recommendation
+- rule-based explanation breakdown
+- LLM-generated or templated narrative per recommendation
+- agent trace events
+- check confidence and flags
+
+## 5. Data
+
+The current catalog is stored in `data/songs.csv`.
+
+Current dataset snapshot:
+
+- `180` songs
+- `18` genres
+- `5` primary moods
+
+Genres currently represented:
+
+- `ambient`, `blues`, `classical`, `country`, `edm`, `folk`, `funk`, `hip-hop`, `indie`, `jazz`, `k-pop`, `latin`, `lofi`, `metal`, `pop`, `r&b`, `reggae`, `rock`
+
+Primary moods currently represented:
+
+- `chill`, `happy`, `intense`, `melancholic`, `relaxed`
+
+Each song record includes:
+
+| Field | Used In Ranking? | Used In Retrieval? |
 |---|---|---|
-| Energy proximity | 25% | `1 − │song.energy − target_energy│` |
-| Genre match | 20% | 1.0 if exact match, else 0.0 |
-| Mood match | 15% | 1.0 primary match · 0.5 tag match · 0.0 no match |
-| Valence proximity | 12% | `1 − │song.valence − target_valence│` |
-| Acousticness fit | 12% | `song.acousticness` if acoustic preferred, else `1 − song.acousticness` |
-| Danceability | 8% | Raw danceability value |
-| Popularity fit | 8% | Normalized popularity if mainstream preferred, inverted if niche preferred |
+| `genre` | Yes | Yes |
+| `mood` | Yes | Yes |
+| `mood_tags` | Yes | Yes |
+| `energy` | Yes | Yes |
+| `tempo_bpm` | No | Yes |
+| `instrumentalness` | No | Yes |
+| `valence` | Yes | Exposed to semantic retrieval |
+| `danceability` | Yes | Exposed to semantic retrieval |
+| `acousticness` | Yes | Exposed to semantic retrieval |
+| `popularity` | Yes | Not directly filtered |
+| `liveness` | No | No |
+| `duration_sec` | No | No |
+| `explicit` | No | No |
+| `release_decade` | No | No |
 
-**Soft mood matching:** Each song carries a `mood_tags` field (e.g., `"happy|uplifting|summer"`). If a song's primary mood doesn't match but the user's mood appears in its tags, it receives 0.5 credit instead of 0. This allows partial matches across mood boundaries.
+This is a small catalog, which makes the system easier to inspect but also limits coverage for niche combinations of mood, genre, and constraints.
 
-Songs are ranked by their total score. A **diversity cap** limits results to at most two songs from any single genre.
+## 6. How Ranking Works
 
-**Named ranking strategies** replace the earlier single weight-shift experiment. Setting `ACTIVE_STRATEGY` in `main.py` switches the right-column output to one of three presets, each giving one signal a dominant share:
+The deterministic ranker uses these default weights:
 
-| Strategy | Dominant signal | Intent |
-|---|---|---|
-| `genre_first` | genre 50% | Genre loyalty — stay within the user's category above all else |
-| `mood_first` | mood 50% | Vibe match — emotional state matters more than genre label |
-| `energy_similarity` | energy 55% | Audio twin — find the closest feel regardless of genre or mood |
-
-Each profile run prints two side-by-side tables — default weights vs. active strategy — along with per-song bullet-point explanations of which factors drove the score.
-
----
-
-## 4. Data
-
-The catalog is `data/songs.csv`, which contains **30 songs** across **27 genres** (ambient, blues, bossa nova, classical, country, edm, folk, funk, hip-hop, indie pop, indie rock, jazz, jazz fusion, k-pop, latin, lofi, metal, new wave, pop, post-rock, r&b, reggae, rock, soul, synthwave, techno, trap) and **9 moods** (chill, confident, focused, happy, intense, melancholic, moody, relaxed, romantic). The dataset is entirely synthetic.
-
-Each song carries the following fields — those in **bold** are used in scoring:
-
-| Field | Type | Scored? |
-|---|---|---|
-| **genre** | string | Yes |
-| **mood** | string | Yes (primary) |
-| **mood_tags** | pipe-separated string | Yes (soft match) |
-| **energy** | float 0–1 | Yes |
-| **valence** | float 0–1 | Yes |
-| **danceability** | float 0–1 | Yes |
-| **acousticness** | float 0–1 | Yes |
-| **popularity** | int 0–100 | Yes |
-| tempo_bpm | float | No |
-| liveness | float 0–1 | No |
-| duration_sec | int | No |
-| explicit | 0 or 1 | No |
-| release_decade | string | No |
-
-Notable gaps: most genres still have only one or two representative songs, which means the diversity cap rarely constrains niche genres. There are no songs for some mood×genre combinations (e.g., no jazz song is tagged "happy").
-
----
-
-## 5. Strengths
-
-The system works well for users whose preferences are internally consistent — a high-energy pop fan or a chill lofi listener gets sensible, coherent results because genre, mood, and energy all point toward the same songs. The diversity cap meaningfully improves results for users whose top genre has limited catalog coverage, forcing the recommender to surface interesting alternatives.
-
-**Soft mood matching** reduces the harsh cliff between "exact match" and "no match": a song tagged `"happy|uplifting|summer"` still earns partial credit for a user who wants happy music even if its primary mood label differs.
-
-**Valence and popularity scoring** add two dimensions that were previously ignored. Valence lets the model distinguish between bright/upbeat songs and darker ones even within the same genre. The popularity dimension can be inverted, so users who prefer underground or niche music are actively rewarded rather than penalized by default mainstream bias.
-
-**Named ranking strategies** (`genre_first`, `mood_first`, `energy_similarity`) make it easy to see how a single design decision — which signal should dominate — changes the entire character of the output. The explanation feature generates per-song bullet-point reasons, making it easy to audit exactly which factors drove each result.
-
----
-
-## 6. Limitations and Bias
-
-- **Energy still dominates.** At 25%, energy remains the single largest factor. A user who wants melancholic classical music but sets a high energy target will rarely see low-energy melancholic songs because the energy gap overwhelms mood and genre bonuses.
-- **Genre matching is still binary.** There is no partial credit for related genres — "lofi" and "ambient" are treated as completely unrelated. A user who runs out of lofi songs in the catalog gets arbitrary genre fallbacks rather than acoustically similar alternatives.
-- **Sparse genre coverage.** Most genres still have only one or two songs, so the diversity cap rarely constrains results and some genre/mood combinations simply don't exist (e.g., no jazz song is tagged "happy").
-- **Popularity bias.** `prefer_popular` defaults to `True`, which means by default every scoring run gives a small advantage to chart-popular songs. Users who don't set this explicitly will subtly be steered toward mainstream tracks.
-- **Tempo and several new fields are unused.** `tempo_bpm`, `liveness`, `duration_sec`, `explicit`, and `release_decade` are loaded from the CSV but carry zero weight in scoring. Two songs with very different tempos or live vs. studio feels are still treated identically.
-- **No personalization over time.** The model has no memory of past listens, so it cannot learn or adapt.
-
----
-
-## 7. Evaluation
-
-Six profiles were run side-by-side under the default weights vs. each named strategy:
-
-| Profile | What was checked |
+| Signal | Weight |
 |---|---|
-| High-Energy Pop | Expected pop songs near energy 0.88 to dominate |
-| Chill Lofi | Expected lofi songs + diversity cap to kick in after 2 |
-| Deep Intense Rock | Only one rock song exists — tested fallback behavior |
-| Conflicting Energy + Mood | High energy vs. melancholic mood pulling in opposite directions |
-| Acoustic EDM Contradiction | Genre bonus for EDM vs. acousticness penalty |
-| No Exact Match in Catalogue | Jazz + happy = no song qualifies; tested graceful degradation |
+| Energy proximity | 25% |
+| Genre match | 20% |
+| Mood match | 15% |
+| Valence proximity | 12% |
+| Acousticness fit | 12% |
+| Danceability | 8% |
+| Popularity fit | 8% |
 
-**Key findings:**
+The score is a weighted combination of those signals. A song can still rank well without matching every field if it is strong on the most heavily weighted features.
 
-- Under **default weights**, "Copper Cathedral" (classical, melancholic, energy=0.30) appears at rank 1 for the Conflicting Energy + Mood profile because the balanced weights give enough combined credit to its genre, mood, and acousticness to overcome its energy penalty.
-- Under **`genre_first`**, "Coffee Shop Stories" (the only jazz track) jumps to rank 1 for the No Exact Match profile even though its energy (0.37) is nearly opposite to the user's target (0.9). The 50% genre bonus overrides every other signal — demonstrating how strategy choice can completely invert a ranking.
-- Under **`energy_similarity`**, genre and mood labels become almost irrelevant. The top 5 for a "jazz/happy/energy=0.9" user are entirely non-jazz songs ranked by how close their energy is to 0.9.
-- The **soft mood tag matching** had a measurable effect in several profiles where a song's primary mood differed from the user's preference but its tags included a partial match — those songs ranked noticeably higher than they would have under binary matching.
+Mood matching has a soft-match path:
 
----
+- exact mood match gets full credit
+- mood tag match gets partial credit
+- no mood match gets zero credit
 
-## 8. Future Work
+The system also supports alternative weight presets:
 
-- **Soft genre similarity** — cluster related genres (lofi, ambient, acoustic folk) so fallback recommendations feel intentional rather than arbitrary.
-- **Use the remaining unused fields** — `tempo_bpm`, `liveness`, `duration_sec`, `explicit`, and `release_decade` are loaded but not scored. Tempo would let the model distinguish fast-happy from slow-happy; liveness could serve users who prefer live recordings; release decade could support nostalgia or recency preferences.
-- **Learned weights and learned strategies** — instead of hand-tuning, infer both the weight distribution and the appropriate strategy from implicit feedback (skips, replays, queue additions).
-- **Popularity calibration** — the current popularity signal treats a score of 70 the same regardless of genre. Normalizing within genre (a popularity of 70 in jazz means something very different than in pop) would reduce cross-genre bias.
-- **Contextual profiles** — support time-of-day or activity context (working, exercising, winding down) rather than a single static preference vector. This would also give the strategy system a natural trigger: automatically switch to `energy_similarity` for a workout context.
+- `genre_first`
+- `mood_first`
+- `energy_similarity`
 
----
+These presets make it easier to compare how different recommendation philosophies change the final output.
 
-## 9. Personal Reflection
+## 7. Retrieval And Agent Behavior
 
-Building this made the energy-dominance problem immediately visible in a way that reading about recommender bias never did — watching "Copper Cathedral" disappear from results despite being a perfect mood match was a concrete, memorable illustration of how feature weighting shapes what users never see. It also changed how I think about music apps: the songs surfaced at the top of a playlist are not "the best matches" in some objective sense; they are the winners of a weighted arithmetic race whose rules were set by engineers, and small changes to those weights produce meaningfully different listening experiences.
+The LLM layer does not directly score songs. Instead, it controls which candidate songs are passed to the deterministic ranker.
+
+### Retrieval tools
+
+- `structured_filter`: pure logic filter on genre, mood, BPM, energy, and instrumentalness
+- `semantic_search`: LLM selects matching song ids from the catalog
+- `hybrid`: deterministic narrowing first, then semantic selection inside the narrowed set
+
+### Check output
+
+The check step returns:
+
+- a confidence score from `0.0` to `1.0`
+- zero or more flags
+
+Supported flags:
+
+- `looks_good`
+- `low_result_count`
+- `constraint_violated`
+- `intent_mismatch`
+
+These signals are used for observability and for deciding whether the system should refine and retry.
+
+## 8. Strengths
+
+- The system handles free-text requests that the original structured-only recommender could not accept.
+- The deterministic scorer keeps the final ranking reproducible and testable.
+- The check step makes uncertainty visible instead of silently hiding weak retrieval results.
+- The fallback explainer keeps the system functional even if the LLM explanation call fails.
+- The separation between retrieval and ranking makes the architecture easier to debug than a fully end-to-end LLM recommender.
+
+## 9. Limitations And Biases
+
+- The catalog is still relatively small, so some requests fail because the data is sparse rather than because the logic is wrong.
+- Genre matching in the ranker is binary, so related genres do not receive partial credit.
+- The system can still struggle with contradictory requests such as wanting a very high-energy but strongly melancholic acoustic track.
+- `tempo_bpm` and `instrumentalness` affect retrieval but not final ranking, so some constraints shape the candidate set more than the final score.
+- `prefer_popular=True` by default can tilt the system toward mainstream music unless changed.
+- LLM planning and semantic retrieval are dependent on prompt quality and API availability.
+- The recommendations are not personalized from listening history, so they should not be interpreted as behaviorally learned taste modeling.
+
+## 10. Reliability And Safety Features
+
+The project includes several guardrails and evaluation-oriented features:
+
+- structured Pydantic schemas for plan, semantic picks, and check outputs
+- confidence scoring and issue flags in the check step
+- retry/refine loop capped at 2 iterations
+- templated fallback when the LLM explainer fails
+- structured logging for LLM calls in `logs/llm_calls.jsonl`
+- automated tests covering agent flow, tools, explainer behavior, and deterministic ranking
+
+Known testing status:
+
+- the suite passes with `PYTHONPATH=. pytest -p no:cacheprovider`
+- plain `pytest` currently has an import-path issue because tests import `src.recommender`
+
+## 11. Evaluation Summary
+
+The system has been evaluated primarily through automated tests and representative manual runs.
+
+What has been validated:
+
+- deterministic ranking remains stable
+- tool dispatch routes correctly
+- structured filtering respects hard constraints
+- semantic retrieval prompt wiring is correct under mocks
+- the agent emits trace events in the correct order
+- the check step is skipped when no candidates are returned and replaced with a synthesized low-confidence verdict
+- the explainer falls back safely when the API call fails
+- refine behavior switches tools or relaxes constraints in the tested scenarios
+
+This evaluation is good for correctness and reliability of the workflow, but it is not yet a full recommendation-quality benchmark.
+
+## 12. Misuse Considerations
+
+Possible misuses include:
+
+- overstating the system as a production-quality personalized recommender
+- treating LLM narratives as objective truth rather than user-facing explanations
+- assuming missing songs imply bad taste matches instead of sparse catalog coverage
+
+Ways the project reduces that risk:
+
+- exposing confidence and flags
+- keeping the ranking logic inspectable
+- logging intermediate decisions
+- documenting limitations directly in the README and model card
+
+## 13. Future Improvements
+
+- fix the import-path issue so plain `pytest` works
+- build a formal evaluation harness with saved benchmark queries
+- incorporate more song features into final ranking
+- expand the catalog for better genre and mood coverage
+- add softer similarity between related genres
+- compare templated vs. LLM explanation quality with a repeatable rubric
+
+## 14. Reflection
+
+This project reinforced that an AI system is rarely just "the model." The real behavior comes from how planning, retrieval, scoring, fallback logic, and error handling interact. The most valuable design choice here was keeping the LLM responsible for interpretation and explanation while leaving final ranking to deterministic logic. That split made the system easier to reason about, easier to test, and more honest about uncertainty.

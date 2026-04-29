@@ -185,4 +185,76 @@ def test_hybrid_retries_with_relaxed_vibe_filters_after_zero_candidates(monkeypa
     assert result.candidate_count == 1
     assert result.plan.mood_filter == []
     assert result.recommendations[0].song["id"] == 1
-    assert any(ev["kind"] == "act_retry" for ev in result.trace_events)
+    assert any(ev["kind"] == "refine" for ev in result.trace_events)
+
+
+def test_refine_switches_structured_filter_to_hybrid_on_intent_mismatch(monkeypatch, songs, profile):
+    plan = Plan(
+        intent="chill study music",
+        chosen_tool="structured_filter",
+        expected_count_min=1,
+        expected_count_max=5,
+        mood_filter=["focus"],
+        energy_max=0.3,
+    )
+    verdicts = iter([
+        CheckVerdict(confidence=0.45, flags=[CheckFlag.INTENT_MISMATCH], note="too narrow"),
+        CheckVerdict(confidence=0.82, flags=[CheckFlag.LOOKS_GOOD], note="better fit"),
+    ])
+
+    def fake_parsed(*, system, user, label, schema, max_tokens, **kwargs):
+        if schema.__name__ == "Plan":
+            return plan
+        if schema.__name__ == "CheckVerdict":
+            return next(verdicts)
+        raise AssertionError(schema.__name__)
+
+    monkeypatch.setattr("src.recommender.llm.agent.client.call_messages_parsed", fake_parsed)
+    monkeypatch.setattr("src.recommender.llm.explainer.client.call_messages", lambda **kwargs: "Because better.")
+    monkeypatch.setattr(
+        "src.recommender.tools.hybrid.semantic_search.run",
+        lambda plan_arg, songs_arg: songs_arg,
+    )
+
+    result = agent.run("chill study music", profile, songs)
+
+    assert result.plan.chosen_tool == "hybrid"
+    assert result.plan.semantic_query == "chill study music"
+    assert result.plan.energy_max == pytest.approx(0.4)
+    refine_events = [ev for ev in result.trace_events if ev["kind"] == "refine"]
+    assert refine_events
+    assert refine_events[0]["from_tool"] == "structured_filter"
+    assert refine_events[0]["to_tool"] == "hybrid"
+
+
+def test_refine_switches_to_structured_filter_on_constraint_violated(monkeypatch, songs, profile):
+    plan = Plan(
+        intent="instrumental chill study music",
+        chosen_tool="semantic_search",
+        expected_count_min=1,
+        expected_count_max=5,
+        semantic_query="instrumental chill study music",
+        instrumentalness_min=0.9,
+    )
+    verdicts = iter([
+        CheckVerdict(confidence=0.55, flags=[CheckFlag.CONSTRAINT_VIOLATED], note="returned vocals"),
+        CheckVerdict(confidence=0.85, flags=[CheckFlag.LOOKS_GOOD], note="constraints enforced"),
+    ])
+
+    def fake_parsed(*, system, user, label, schema, max_tokens, **kwargs):
+        if schema.__name__ == "Plan":
+            return plan
+        if schema.__name__ == "CheckVerdict":
+            return next(verdicts)
+        raise AssertionError(schema.__name__)
+
+    monkeypatch.setattr("src.recommender.llm.agent.client.call_messages_parsed", fake_parsed)
+    monkeypatch.setattr("src.recommender.llm.explainer.client.call_messages", lambda **kwargs: "Because instrumental.")
+    monkeypatch.setitem(agent.dispatch.TOOLS, "semantic_search", lambda plan_arg, songs_arg: songs_arg)
+
+    result = agent.run("chill study music, no vocals", profile, songs)
+
+    assert result.plan.chosen_tool == "structured_filter"
+    refine_events = [ev for ev in result.trace_events if ev["kind"] == "refine"]
+    assert refine_events
+    assert refine_events[0]["to_tool"] == "structured_filter"

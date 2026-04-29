@@ -1,7 +1,11 @@
-"""Streamlit UI for the agent-orchestrated music recommender."""
+"""Streamlit UI for the agent-orchestrated music recommender.
+    streamlit run streamlit_app.py
+"""
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -514,5 +518,24 @@ def main() -> None:
     _render_trace(result)
 
 
+def _is_running_in_streamlit() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+    except ImportError:
+        return False
+    return get_script_run_ctx(suppress_warning=True) is not None
+
+
+def _run_with_streamlit() -> None:
+    from streamlit.web import cli as stcli
+
+    script_path = str(Path(__file__).resolve())
+    sys.argv = ["streamlit", "run", script_path, *sys.argv[1:]]
+    raise SystemExit(stcli.main())
+
+
 if __name__ == "__main__":
-    main()
+    if _is_running_in_streamlit():
+        main()
+    else:
+        _run_with_streamlit()

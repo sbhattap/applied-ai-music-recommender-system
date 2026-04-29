@@ -62,6 +62,11 @@ def _print_trace(events):
             v = ev["verdict"]
             print(f"  [CHECK]   confidence={v['confidence']:.2f}, "
                   f"flags={v['flags']}, note={v['note']!r}")
+        elif kind == "refine":
+            print(f"  [REFINE]  confidence={ev['confidence']:.2f}, "
+                  f"flags={ev['flags']}, from={ev['from_tool']} -> {ev['to_tool']}")
+        elif kind == "refine_stop":
+            print(f"  [STOP]    {ev['reason']}")
         elif kind == "respond":
             print(f"  [RESPOND] returned {ev['recommendation_count']} recommendations")
         elif kind == "explainer_fallback":

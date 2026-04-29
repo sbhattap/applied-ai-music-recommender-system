@@ -1,8 +1,4 @@
-"""Agent orchestrator: plan -> act -> check -> respond.
-
-The four-act loop, with a small recovery step when hybrid retrieval becomes too
-strict for a small catalog.
-"""
+"""Agent orchestrator: plan -> act -> check -> refine -> respond."""
 
 from typing import Any, Dict, List, Optional
 
@@ -86,13 +82,49 @@ def check_candidates(plan: Plan, candidates: List[Dict[str, Any]]) -> CheckVerdi
     )
 
 
-def _relaxed_hybrid_plan(plan: Plan) -> Optional[Plan]:
-    """Retry hybrid with only hard constraints preserved.
+def _synthesize_empty_verdict() -> CheckVerdict:
+    return CheckVerdict(
+        confidence=0.0,
+        flags=[CheckFlag.LOW_RESULT_COUNT],
+        note="No candidates returned by the tool.",
+    )
 
-    In small catalogs, hybrid can become too narrow when the plan contains both
-    semantic intent and structured vibe hints. Keep explicit "hard" constraints
-    like instrumentalness/BPM, but let semantic_search carry the vibe.
-    """
+
+def _has_hard_constraints(plan: Plan) -> bool:
+    return any([
+        bool(plan.genre_filter),
+        bool(plan.mood_filter),
+        plan.bpm_min is not None,
+        plan.bpm_max is not None,
+        plan.energy_min is not None,
+        plan.energy_max is not None,
+        plan.instrumentalness_min is not None,
+        plan.instrumentalness_max is not None,
+    ])
+
+
+def _widen_numeric_range(
+    low: Optional[float],
+    high: Optional[float],
+    *,
+    step: float,
+    floor: Optional[float] = None,
+    ceiling: Optional[float] = None,
+) -> tuple[Optional[float], Optional[float]]:
+    widened_low = low
+    widened_high = high
+    if low is not None:
+        widened_low = low - step
+        if floor is not None:
+            widened_low = max(floor, widened_low)
+    if high is not None:
+        widened_high = high + step
+        if ceiling is not None:
+            widened_high = min(ceiling, widened_high)
+    return widened_low, widened_high
+
+
+def _relax_hybrid_constraints(plan: Plan) -> Optional[Plan]:
     if plan.chosen_tool != "hybrid":
         return None
 
@@ -107,6 +139,84 @@ def _relaxed_hybrid_plan(plan: Plan) -> Optional[Plan]:
     return relaxed
 
 
+def _refine_plan(
+    plan: Plan,
+    candidates: List[Dict[str, Any]],
+    verdict: CheckVerdict,
+) -> Optional[Plan]:
+    flags = set(verdict.flags)
+
+    if not candidates and CheckFlag.LOW_RESULT_COUNT in flags:
+        return _relax_hybrid_constraints(plan)
+
+    if CheckFlag.CONSTRAINT_VIOLATED in flags:
+        if plan.chosen_tool != "structured_filter" and _has_hard_constraints(plan):
+            refined = plan.model_copy(deep=True)
+            refined.chosen_tool = "structured_filter"
+            refined.semantic_query = None
+            if refined != plan:
+                return refined
+
+    if verdict.confidence < 0.6 or CheckFlag.INTENT_MISMATCH in flags:
+        refined = plan.model_copy(deep=True)
+        if refined.chosen_tool == "structured_filter":
+            refined.chosen_tool = "hybrid"
+            if not refined.semantic_query:
+                refined.semantic_query = refined.intent
+        elif refined.chosen_tool == "hybrid":
+            refined.chosen_tool = "semantic_search"
+            if not refined.semantic_query:
+                refined.semantic_query = refined.intent
+            refined.genre_filter = []
+            refined.mood_filter = []
+        else:
+            refined.semantic_query = refined.semantic_query or refined.intent
+
+        refined.energy_min, refined.energy_max = _widen_numeric_range(
+            refined.energy_min, refined.energy_max, step=0.1, floor=0.0, ceiling=1.0
+        )
+        refined.bpm_min, refined.bpm_max = _widen_numeric_range(
+            refined.bpm_min, refined.bpm_max, step=10.0, floor=0.0
+        )
+
+        if refined != plan:
+            return refined
+
+    return None
+
+
+def _should_refine(verdict: CheckVerdict) -> bool:
+    flags = set(verdict.flags)
+    return (
+        verdict.confidence < 0.6
+        or CheckFlag.LOW_RESULT_COUNT in flags
+        or CheckFlag.CONSTRAINT_VIOLATED in flags
+        or CheckFlag.INTENT_MISMATCH in flags
+    )
+
+
+def _execute_pass(
+    plan: Plan,
+    songs: List[Dict[str, Any]],
+    trace: TraceRecorder,
+    *,
+    iteration: int,
+) -> tuple[Plan, List[Dict[str, Any]], CheckVerdict]:
+    trace.record("plan", iteration=iteration, plan=plan.model_dump())
+    candidates = dispatch.call(plan.chosen_tool, plan, songs)
+    trace.record(
+        "act",
+        iteration=iteration,
+        tool=plan.chosen_tool,
+        candidate_count=len(candidates),
+        candidate_ids=[s["id"] for s in candidates],
+    )
+
+    verdict = check_candidates(plan, candidates) if candidates else _synthesize_empty_verdict()
+    trace.record("check", iteration=iteration, verdict=verdict.model_dump())
+    return plan, candidates, verdict
+
+
 def run(
     query: str,
     profile: Dict[str, Any],
@@ -115,52 +225,54 @@ def run(
     k: int = 5,
     use_llm_explainer: bool = True,
     trace: Optional[TraceRecorder] = None,
+    max_refines: int = 2,
 ) -> AgentResult:
     """Run the full four-act loop for a single query."""
     if trace is None:
         trace = TraceRecorder(query)
 
-    # Act 1 - Plan
-    plan = plan_query(query, profile)
-    trace.record("plan", plan=plan.model_dump())
+    current_plan = plan_query(query, profile)
+    plan_used = current_plan
+    candidates: List[Dict[str, Any]] = []
+    verdict = _synthesize_empty_verdict()
+    seen_plans = {current_plan.model_dump_json()}
 
-    # Act 2 - Act (call the chosen tool)
-    plan_used = plan
-    candidates = dispatch.call(plan_used.chosen_tool, plan_used, songs)
-    if not candidates:
-        relaxed_plan = _relaxed_hybrid_plan(plan)
-        if relaxed_plan is not None:
-            relaxed_candidates = dispatch.call(relaxed_plan.chosen_tool, relaxed_plan, songs)
-            if relaxed_candidates:
-                plan_used = relaxed_plan
-                candidates = relaxed_candidates
-                trace.record(
-                    "act_retry",
-                    reason="relaxed hybrid constraints after zero-candidate first pass",
-                    tool=relaxed_plan.chosen_tool,
-                    candidate_count=len(candidates),
-                    candidate_ids=[s["id"] for s in candidates],
-                    relaxed_fields=["genre_filter", "mood_filter", "energy_min", "energy_max"],
-                )
-    trace.record(
-        "act",
-        tool=plan_used.chosen_tool,
-        candidate_count=len(candidates),
-        candidate_ids=[s["id"] for s in candidates],
-    )
-
-    # Act 3 - Check (passive)
-    if candidates:
-        verdict = check_candidates(plan_used, candidates)
-    else:
-        verdict = CheckVerdict(
-            confidence=0.0,
-            flags=[CheckFlag.LOW_RESULT_COUNT],
-            note="No candidates returned by the tool.",
+    for iteration in range(max_refines + 1):
+        plan_used, candidates, verdict = _execute_pass(
+            current_plan,
+            songs,
+            trace,
+            iteration=iteration,
         )
-    trace.record("check", verdict=verdict.model_dump())
+        if iteration >= max_refines or not _should_refine(verdict):
+            break
 
-    # Act 4 - Respond: deterministic re-rank, then LLM explanations
+        refined_plan = _refine_plan(plan_used, candidates, verdict)
+        trace.record(
+            "refine",
+            iteration=iteration,
+            reason=verdict.note,
+            confidence=verdict.confidence,
+            flags=[flag.value for flag in verdict.flags],
+            candidate_count=len(candidates),
+            from_tool=plan_used.chosen_tool,
+            to_tool=refined_plan.chosen_tool if refined_plan else None,
+            refined_plan=refined_plan.model_dump() if refined_plan else None,
+        )
+        if refined_plan is None:
+            break
+
+        refined_key = refined_plan.model_dump_json()
+        if refined_key in seen_plans:
+            trace.record(
+                "refine_stop",
+                iteration=iteration,
+                reason="Refined plan matches a previous plan.",
+            )
+            break
+        seen_plans.add(refined_key)
+        current_plan = refined_plan
+
     prefs = _profile_to_prefs(profile)
     ranked = recommend_songs(prefs, candidates, k=k) if candidates else []
     profile_summary = _profile_summary(profile)
