@@ -3,7 +3,18 @@
 import pytest
 
 from src.recommender.llm import agent
-from src.recommender.llm.types import CheckFlag, CheckVerdict, Plan
+from src.recommender.llm.types import (
+    BatchNarratives,
+    CheckFlag,
+    CheckVerdict,
+    Plan,
+    SongNarrative,
+)
+
+
+@pytest.fixture(autouse=True)
+def llm_configured(monkeypatch):
+    monkeypatch.setattr("src.recommender.llm.agent.client.is_configured", lambda: True)
 
 
 @pytest.fixture
@@ -50,6 +61,12 @@ def _stub_llm(monkeypatch, *, plan: Plan, verdict: CheckVerdict, narrative: str 
             return plan
         if schema.__name__ == "CheckVerdict":
             return verdict
+        if schema.__name__ == "BatchNarratives":
+            ids = [int(line.split("song_id=")[1].split(":")[0])
+                   for line in user.splitlines() if "song_id=" in line]
+            return BatchNarratives(narratives=[
+                SongNarrative(song_id=i, narrative=narrative) for i in ids
+            ])
         raise AssertionError(f"unexpected schema: {schema.__name__}")
 
     def fake_text(*, system, user, label, max_tokens, **kwargs):
@@ -73,17 +90,71 @@ def test_full_loop_structured_filter_path(monkeypatch, songs, profile):
                            note="lofi tracks for chill study match well")
     calls = _stub_llm(monkeypatch, plan=plan, verdict=verdict)
 
-    result = agent.run("chill study music", profile, songs, k=3)
+    result = agent.run("chill study music", profile, songs, k=3, fast_check=False)
 
     assert result.plan.chosen_tool == "structured_filter"
     assert result.candidate_count == 2
     assert result.verdict.confidence == pytest.approx(0.85)
     assert len(result.recommendations) == 2  # only 2 lofi songs in the catalog
-    # plan, check, and one explainer call per recommendation
+    # plan, check, and ONE batched explainer call covering both recommendations
     labels = [c["label"] for c in calls]
     assert labels.count("plan") == 1
     assert labels.count("check") == 1
-    assert labels.count("explainer") == 2
+    assert labels.count("explainer") == 1
+    assert all(rec.narrative == "Because lofi." for rec in result.recommendations)
+    assert result.narratives_from_llm
+    assert {"plan", "retrieve", "check", "rank", "explain", "total"} <= set(result.timings_ms)
+
+
+def test_structured_filter_uses_deterministic_check(monkeypatch, songs, profile):
+    plan = Plan(
+        intent="lofi", chosen_tool="structured_filter",
+        expected_count_min=2, expected_count_max=5, genre_filter=["lofi"],
+    )
+    calls = _stub_llm(monkeypatch, plan=plan, verdict=CheckVerdict(confidence=1.0, note="unused"))
+
+    result = agent.run("lofi please", profile, songs)
+
+    assert all(c["label"] != "check" for c in calls)
+    assert CheckFlag.LOOKS_GOOD in result.verdict.flags
+    check_events = [ev for ev in result.trace_events if ev["kind"] == "check"]
+    assert check_events[0]["source"] == "deterministic"
+
+
+def test_offline_mode_uses_heuristic_plan_and_skips_llm(monkeypatch, songs, profile):
+    monkeypatch.setattr("src.recommender.llm.agent.client.is_configured", lambda: False)
+    monkeypatch.setitem(agent.dispatch.TOOLS, "hybrid", lambda plan_arg, songs_arg: songs_arg[:2])
+    monkeypatch.setitem(agent.dispatch.TOOLS, "semantic_search", lambda plan_arg, songs_arg: songs_arg[:2])
+
+    def boom(**kwargs):
+        raise AssertionError("LLM must not be called offline")
+
+    monkeypatch.setattr("src.recommender.llm.agent.client.call_messages_parsed", boom)
+
+    result = agent.run("chill study music, no vocals", profile, songs)
+
+    first_plan = next(ev["plan"] for ev in result.trace_events if ev["kind"] == "plan")
+    assert first_plan["chosen_tool"] == "hybrid"
+    assert first_plan["instrumentalness_min"] == pytest.approx(0.8)
+    assert len(result.recommendations) == 2
+    assert not result.narratives_from_llm
+    assert any(ev["kind"] == "plan_fallback" for ev in result.trace_events)
+
+
+def test_explain_result_standalone_fills_narratives(monkeypatch, songs, profile):
+    plan = Plan(
+        intent="lofi", chosen_tool="structured_filter",
+        expected_count_min=1, expected_count_max=5, genre_filter=["lofi"],
+    )
+    _stub_llm(monkeypatch, plan=plan, verdict=CheckVerdict(confidence=0.8, note="ok"),
+              narrative="LLM narrative.")
+
+    result = agent.run("lofi", profile, songs, use_llm_explainer=False)
+    assert all(rec.narrative != "LLM narrative." for rec in result.recommendations)
+
+    agent.explain_result(result)
+    assert all(rec.narrative == "LLM narrative." for rec in result.recommendations)
+    assert "explain" in result.timings_ms
 
 
 def test_loop_emits_plan_act_check_respond_in_order(monkeypatch, songs, profile):
@@ -216,7 +287,7 @@ def test_refine_switches_structured_filter_to_hybrid_on_intent_mismatch(monkeypa
         lambda plan_arg, songs_arg: songs_arg,
     )
 
-    result = agent.run("chill study music", profile, songs)
+    result = agent.run("chill study music", profile, songs, fast_check=False)
 
     assert result.plan.chosen_tool == "hybrid"
     assert result.plan.semantic_query == "chill study music"

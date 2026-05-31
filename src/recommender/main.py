@@ -70,8 +70,18 @@ def _print_trace(events):
         elif kind == "respond":
             print(f"  [RESPOND] returned {ev['recommendation_count']} recommendations")
         elif kind == "explainer_fallback":
-            print(f"  [WARN]    explainer fell back for song id={ev['song_id']}: {ev['error']}")
+            ids = ev.get("song_ids", "all")
+            print(f"  [WARN]    explainer fell back (songs={ids}): {ev['error']}")
+        elif kind == "plan_fallback":
+            print(f"  [WARN]    planner fell back to heuristic plan: {ev['error']}")
     print()
+
+
+def _print_timings(timings):
+    if not timings:
+        return
+    stages = ", ".join(f"{k}={v}ms" for k, v in timings.items() if k != "total")
+    print(f"  ── Latency: total={timings.get('total', 0)}ms ({stages})\n")
 
 
 def _print_recs(result):
@@ -122,6 +132,7 @@ def main(argv=None):
 
     _print_trace(result.trace_events)
     _print_recs(result)
+    _print_timings(result.timings_ms)
     return 0
 
 

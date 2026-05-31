@@ -1,7 +1,7 @@
 """Tests for the LLM explainer (mocked) and its templated fallback."""
 
 from src.recommender.llm import explainer
-from src.recommender.llm.types import CheckFlag, CheckVerdict
+from src.recommender.llm.types import BatchNarratives, CheckFlag, CheckVerdict, SongNarrative
 
 
 SONG = {
@@ -31,33 +31,38 @@ def test_templated_fallback_hedges_on_low_confidence():
     assert out.startswith("Closest match")
 
 
-def test_explain_calls_llm_with_breakdown_and_verdict(monkeypatch):
-    captured = {}
+def test_explain_batch_makes_one_call_for_all_songs(monkeypatch):
+    calls = []
 
-    def fake_text(*, system, user, label, max_tokens, **kwargs):
-        captured["system"] = system
-        captured["user"] = user
-        captured["label"] = label
-        return "Because it's a perfect lofi fit."
+    def fake_parsed(*, system, user, label, schema, max_tokens, **kwargs):
+        calls.append({"system": system, "user": user, "label": label})
+        return BatchNarratives(narratives=[
+            SongNarrative(song_id=1, narrative="Because it's a lofi fit."),
+            SongNarrative(song_id=99, narrative="Not one of ours."),
+        ])
 
-    monkeypatch.setattr("src.recommender.llm.explainer.client.call_messages", fake_text)
+    monkeypatch.setattr("src.recommender.llm.explainer.client.call_messages_parsed", fake_parsed)
     monkeypatch.setattr(
         "src.recommender.llm.explainer.client.load_prompt",
         lambda name: f"<<{name}-prompt>>",
     )
 
     verdict = CheckVerdict(confidence=0.85, flags=[], note="ok")
-    out = explainer.explain(
+    song2 = {**SONG, "id": 2, "title": "Second"}
+    out = explainer.explain_batch(
         query="chill study music",
         profile_summary="genre=lofi, mood=chill, energy=0.35",
-        song=SONG,
-        score=0.91,
-        breakdown="it's lofi (your favorite genre), and energy matches",
+        items=[
+            {"song": SONG, "score": 0.91, "breakdown": "it's lofi (your favorite genre)"},
+            {"song": song2, "score": 0.80, "breakdown": "energy matches"},
+        ],
         verdict=verdict,
     )
 
-    assert out == "Because it's a perfect lofi fit."
-    assert captured["label"] == "explainer"
-    assert "0.85" in captured["user"]  # verdict confidence reaches the prompt
-    assert "lofi (your favorite genre)" in captured["user"]  # breakdown reaches the prompt
-    assert "chill study music" in captured["user"]  # query reaches the prompt
+    assert len(calls) == 1
+    assert calls[0]["label"] == "explainer"
+    assert calls[0]["system"] == "<<explainer-prompt>>"
+    assert "song_id=1" in calls[0]["user"] and "song_id=2" in calls[0]["user"]
+    assert "confidence=0.85" in calls[0]["user"]
+    # song 2 was skipped by the model; unknown id 99 is dropped
+    assert out == {1: "Because it's a lofi fit."}

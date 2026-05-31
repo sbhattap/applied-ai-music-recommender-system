@@ -45,6 +45,16 @@ class SemanticPicks(BaseModel):
     song_ids: List[int] = Field(default_factory=list)
 
 
+class SongNarrative(BaseModel):
+    song_id: int
+    narrative: str
+
+
+class BatchNarratives(BaseModel):
+    """Wire format for the batched explainer: one narrative per recommended song."""
+    narratives: List[SongNarrative] = Field(default_factory=list)
+
+
 @dataclass
 class Recommendation:
     song: Dict[str, Any]
@@ -62,3 +72,5 @@ class AgentResult:
     verdict: CheckVerdict
     recommendations: List[Recommendation]
     trace_events: List[Dict[str, Any]] = field(default_factory=list)
+    timings_ms: Dict[str, int] = field(default_factory=dict)
+    narratives_from_llm: bool = False

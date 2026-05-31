@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -279,6 +280,20 @@ def _load_catalog(csv_path: str) -> List[Dict[str, Any]]:
     return load_songs(csv_path)
 
 
+# Results are cached on primitive inputs, so re-running the same query (or any widget
+# interaction that triggers a Streamlit rerun) costs nothing.
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
+def _run_ranked(query: str, profile_key: str, k: int, songs_path: str) -> agent.AgentResult:
+    songs = _load_catalog(songs_path)
+    return agent.run(query, PROFILES[profile_key], songs, k=k, use_llm_explainer=False)
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
+def _run_explained(query: str, profile_key: str, k: int, songs_path: str) -> agent.AgentResult:
+    result = copy.deepcopy(_run_ranked(query, profile_key, k, songs_path))
+    return agent.explain_result(result)
+
+
 def _render_header() -> None:
     st.markdown(
         """
@@ -321,11 +336,20 @@ def _candidate_table(result: agent.AgentResult) -> pd.DataFrame:
 
 def _render_metrics(result: agent.AgentResult) -> None:
     flags = [flag.value for flag in result.verdict.flags]
-    metric_cols = st.columns(4)
+    metric_cols = st.columns(5)
     metric_cols[0].metric("Candidates", result.candidate_count)
     metric_cols[1].metric("Recommendations", len(result.recommendations))
     metric_cols[2].metric("Confidence", f"{result.verdict.confidence:.2f}")
     metric_cols[3].metric("Flags", len(flags))
+    metric_cols[4].metric("Latency", f"{result.timings_ms.get('total', 0) / 1000:.2f}s")
+
+
+def _render_timings(result: agent.AgentResult) -> None:
+    timings = {k: v for k, v in result.timings_ms.items() if k != "total"}
+    if not timings:
+        return
+    st.subheader("Latency by Stage")
+    st.bar_chart(pd.Series(timings, name="ms"), horizontal=True)
 
 
 def _render_flag_legend(result: agent.AgentResult) -> None:
@@ -480,30 +504,38 @@ def main() -> None:
         return
 
     try:
-        songs = _load_catalog(controls["songs_path"])
+        _load_catalog(controls["songs_path"])
     except Exception as exc:
         st.error(f"Could not load the song catalog: {exc}")
         return
 
-    profile = PROFILES[controls["profile_key"]]
+    args = (controls["query"], controls["profile_key"], controls["k"], controls["songs_path"])
     with st.spinner("Planning, retrieving, and ranking songs..."):
         try:
-            result = agent.run(
-                controls["query"],
-                profile,
-                songs,
-                k=controls["k"],
-                use_llm_explainer=controls["use_llm_explainer"],
-            )
+            result = _run_ranked(*args)
         except RuntimeError as exc:
             st.error(str(exc))
             st.stop()
 
-    _render_metrics(result)
+    metrics_slot = st.empty()
+    with metrics_slot.container():
+        _render_metrics(result)
     _render_flag_legend(result)
 
+    # Cards render immediately with templated narratives; the batched LLM explainer
+    # then fills them in place.
     st.subheader("Recommendations")
-    _render_recommendation_cards(result)
+    cards_slot = st.empty()
+    with cards_slot.container():
+        _render_recommendation_cards(result)
+
+    if controls["use_llm_explainer"] and result.recommendations:
+        with st.spinner("Writing explanations..."):
+            result = _run_explained(*args)
+        with cards_slot.container():
+            _render_recommendation_cards(result)
+        with metrics_slot.container():
+            _render_metrics(result)
 
     st.subheader("Genre Mix")
     if result.recommendations:
@@ -515,6 +547,7 @@ def main() -> None:
     st.subheader("Run Summary")
     _render_status_summary(result)
 
+    _render_timings(result)
     _render_trace(result)
 
 

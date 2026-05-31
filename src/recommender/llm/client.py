@@ -9,6 +9,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional, Type, TypeVar
 
@@ -79,6 +80,7 @@ def _stop_reason(response: Any) -> str:
     return getattr(finish_reason, "name", str(finish_reason))
 
 
+@lru_cache(maxsize=None)
 def load_prompt(name: str) -> str:
     """Read a prompt file from src/recommender/prompts/. ``name`` is the stem (e.g. ``"plan"``)."""
     path = config.PROMPTS_DIR / f"{name}.md"
@@ -99,6 +101,84 @@ def _log_call(record: Dict[str, Any]) -> None:
         _logger.warning("could not write LLM call log: %s", e)
 
 
+_BUDGET_FOR_EFFORT = {"minimal": 0, "low": 1024, "medium": 4096, "high": 8192}
+
+
+def _thinking_config(types: Any, model: str, effort: Optional[str]) -> Any:
+    """Map our effort level onto the model's thinking knob.
+
+    Gemini 3 takes ``thinking_level``; Gemini 2.5 takes a token ``thinking_budget``.
+    Leaving it unset lets the model think as long as it likes, which is the main
+    source of latency, so every call passes an explicit level.
+    """
+    effort = effort or config.EFFORT
+    if model.startswith("gemini-3"):
+        return types.ThinkingConfig(thinking_level=effort)
+    return types.ThinkingConfig(thinking_budget=_BUDGET_FOR_EFFORT.get(effort, 1024))
+
+
+def _usage(response: Any) -> Dict[str, Any]:
+    meta = getattr(response, "usage_metadata", None)
+    if meta is None:
+        return {}
+    return {
+        "prompt_tokens": getattr(meta, "prompt_token_count", None),
+        "output_tokens": getattr(meta, "candidates_token_count", None),
+        "thinking_tokens": getattr(meta, "thoughts_token_count", None),
+    }
+
+
+def _generate(
+    *,
+    system: str,
+    user: str,
+    label: str,
+    max_tokens: int,
+    effort: Optional[str],
+    temperature: float,
+    model: Optional[str],
+    schema: Optional[Type[BaseModel]] = None,
+) -> str:
+    client = get_client()
+    types = _get_genai_types()
+    model = model or config.MODEL
+
+    extra: Dict[str, Any] = {}
+    if schema is not None:
+        extra = {
+            "response_mime_type": "application/json",
+            "response_json_schema": schema.model_json_schema(),
+        }
+    generation_config = types.GenerateContentConfig(
+        max_output_tokens=max_tokens,
+        temperature=temperature,
+        thinking_config=_thinking_config(types, model, effort),
+        **extra,
+    )
+
+    started = time.monotonic()
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=_build_contents(system, user),
+            config=generation_config,
+        )
+    except Exception as e:
+        _log_call({"label": label, "model": model, "error": str(e), "status": "error"})
+        raise
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    _log_call({
+        "label": label,
+        "model": model,
+        "effort": effort,
+        "elapsed_ms": elapsed_ms,
+        "stop_reason": _stop_reason(response),
+        **_usage(response),
+    })
+    return response.text.strip() if response.text else ""
+
+
 def call_messages(
     *,
     system: str,
@@ -106,38 +186,14 @@ def call_messages(
     label: str,
     max_tokens: int,
     effort: Optional[str] = None,
-    thinking: bool = False,
+    temperature: float = 1.0,
+    model: Optional[str] = None,
 ) -> str:
     """Plain text response. Returns text from Gemini API."""
-    client = get_client()
-    types = _get_genai_types()
-
-    full_message = _build_contents(system, user)
-    generation_config = types.GenerateContentConfig(
-        max_output_tokens=max_tokens,
-        temperature=1.0,
+    return _generate(
+        system=system, user=user, label=label, max_tokens=max_tokens,
+        effort=effort, temperature=temperature, model=model,
     )
-
-    started = time.monotonic()
-    try:
-        response = client.models.generate_content(
-            model=config.MODEL,
-            contents=full_message,
-            config=generation_config,
-        )
-    except Exception as e:
-        _log_call({"label": label, "error": str(e), "status": "error"})
-        raise
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-
-    text = response.text.strip() if response.text else ""
-    _log_call({
-        "label": label,
-        "model": config.MODEL,
-        "elapsed_ms": elapsed_ms,
-        "stop_reason": _stop_reason(response),
-    })
-    return text
 
 
 def call_messages_parsed(
@@ -148,40 +204,17 @@ def call_messages_parsed(
     schema: Type[T],
     max_tokens: int,
     effort: Optional[str] = None,
-    thinking: bool = False,
+    temperature: float = 1.0,
+    model: Optional[str] = None,
 ) -> T:
     """Structured-output call. Returns a validated Pydantic model."""
-    client = get_client()
-    types = _get_genai_types()
-
-    full_message = _build_contents(system, user)
-    generation_config = types.GenerateContentConfig(
-        max_output_tokens=max_tokens,
-        temperature=1.0,
-        response_mime_type="application/json",
-        response_json_schema=schema.model_json_schema(),
+    text = _generate(
+        system=system, user=user, label=label, max_tokens=max_tokens,
+        effort=effort, temperature=temperature, model=model, schema=schema,
     )
+    return schema.model_validate(json.loads(text or "{}"))
 
-    started = time.monotonic()
-    try:
-        response = client.models.generate_content(
-            model=config.MODEL,
-            contents=full_message,
-            config=generation_config,
-        )
-    except Exception as e:
-        _log_call({"label": label, "error": str(e), "status": "error"})
-        raise
-    elapsed_ms = int((time.monotonic() - started) * 1000)
 
-    response_text = response.text.strip() if response.text else "{}"
-    response_json = json.loads(response_text)
-    parsed_output = schema.model_validate(response_json)
-
-    _log_call({
-        "label": label,
-        "model": config.MODEL,
-        "elapsed_ms": elapsed_ms,
-        "stop_reason": _stop_reason(response),
-    })
-    return parsed_output
+def is_configured() -> bool:
+    """True when an API key is present. Lets callers pick the offline path up front."""
+    return bool(os.environ.get("GEMINI_API_KEY"))
