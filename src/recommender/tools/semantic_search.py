@@ -1,7 +1,8 @@
-"""LLM-driven match against the song catalog.
+"""Semantic match against the song catalog.
 
-For 30 songs we just pass the full catalog to the model and ask for matching ids.
-No embeddings, no vector store — the corpus fits in a prompt.
+Default backend is the local hybrid retriever (dense + BM25, ~5 ms). The original
+LLM backend — the full catalog in a prompt, one model call per search — is kept behind
+``RECOMMENDER_SEMANTIC_BACKEND=llm`` so evals can compare the two.
 """
 
 from typing import Any, Dict, List
@@ -9,6 +10,11 @@ from typing import Any, Dict, List
 from .. import config
 from ..llm import client
 from ..llm.types import Plan, SemanticPicks
+from ..rag import get_retriever
+
+
+MIN_RESULTS = 8
+MAX_RESULTS = 15
 
 
 _SYSTEM = """\
@@ -38,10 +44,24 @@ def _format_catalog(songs: List[Dict[str, Any]]) -> str:
 
 
 def run(plan: Plan, songs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Return the catalog subset whose ids the LLM picked for ``plan.semantic_query``."""
+    """Return the songs that best match ``plan.semantic_query``."""
     if not plan.semantic_query:
         return list(songs)
+    if config.SEMANTIC_BACKEND == "llm":
+        return run_llm(plan, songs)
+    return run_rag(plan, songs)
 
+
+def run_rag(plan: Plan, songs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Top-N by hybrid retrieval. N follows the planner's expected count, within bounds."""
+    top_n = max(MIN_RESULTS, min(MAX_RESULTS, plan.expected_count_max))
+    hits = get_retriever(songs).search(plan.semantic_query, songs, top_n=top_n)
+    by_id = {s["id"]: s for s in songs}
+    return [by_id[h.song_id] for h in hits]
+
+
+def run_llm(plan: Plan, songs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return the catalog subset whose ids the LLM picked for ``plan.semantic_query``."""
     user_msg = (
         f"Intent: {plan.semantic_query}\n\n"
         f"Catalog ({len(songs)} songs):\n{_format_catalog(songs)}\n\n"

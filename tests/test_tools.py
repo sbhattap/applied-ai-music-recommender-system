@@ -125,6 +125,7 @@ def test_semantic_search_passes_query_through(songs, monkeypatch):
         "src.recommender.tools.semantic_search.client.call_messages_parsed",
         fake_parsed,
     )
+    monkeypatch.setattr("src.recommender.tools.semantic_search.config.SEMANTIC_BACKEND", "llm")
     plan = _plan(chosen_tool="semantic_search", semantic_query="quiet music")
     out = semantic_search.run(plan, songs)
 

@@ -9,6 +9,7 @@ description = "Music recommender system with deterministic ranking and LLM-assis
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "fastembed>=0.9.1",
   "google-genai>=1.0.0",
   "pandas",
   "pydantic>=2.0",
@@ -27,3 +28,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

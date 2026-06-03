@@ -39,3 +39,6 @@ for_me.md
 .env
 .spotify_tokens.json
 import_spotify_playlist.py
+
+# Local caches (embedding model, vector index)
+.cache/

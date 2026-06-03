@@ -27,6 +27,31 @@ INSTRUMENTALNESS_OVERRIDES = {
 }
 
 
+# Artist names that contain a comma; everything else in the ``artist`` column is a
+# comma-separated list of credited artists.
+_COMMA_NAMES = (
+    "Earth, Wind & Fire",
+    "Crosby, Stills, Nash & Young",
+    "Tyler, The Creator",
+    "Grover Washington, Jr.",
+)
+
+
+def split_artists(artist: str) -> List[str]:
+    """Split a credited-artists string into individual names."""
+    protected = artist
+    for i, name in enumerate(_COMMA_NAMES):
+        protected = protected.replace(name, f"\x00{i}\x00")
+    names = []
+    for part in protected.split(","):
+        part = part.strip()
+        for i, name in enumerate(_COMMA_NAMES):
+            part = part.replace(f"\x00{i}\x00", name)
+        if part:
+            names.append(part)
+    return names
+
+
 def _normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value.strip().lower())
     ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
