@@ -3,7 +3,10 @@
 from typing import Any, Dict, List, Optional
 
 from .. import config
-from ..core.ranking import recommend_songs
+from ..core.rerank import rerank
+from ..rag import citations
+from ..rag.documents import Document
+from ..rag.retriever import SongHit, get_retriever
 from ..tools import dispatch
 from ..trace.recorder import TraceRecorder
 from . import client, explainer
@@ -35,12 +38,22 @@ def _profile_summary(profile: Dict[str, Any]) -> str:
     )
 
 
-def _candidate_summary(songs: List[Dict[str, Any]], limit: int = 12) -> str:
+def _candidate_summary(
+    songs: List[Dict[str, Any]],
+    hits: Optional[Dict[int, SongHit]] = None,
+    limit: int = 12,
+) -> str:
+    hits = hits or {}
     sample = songs[:limit]
+
+    def retrieval(s: Dict[str, Any]) -> str:
+        h = hits.get(s["id"])
+        return f", query_match={h.query_match:.2f} ({h.found_by})" if h else ""
+
     lines = [
         f"  id={s['id']:<3} | {s['title']!r} | genre={s['genre']}, "
         f"mood={s['mood']}, bpm={s['tempo_bpm']:.0f}, energy={s['energy']:.2f}, "
-        f"instrumental={s.get('instrumentalness', 0.0):.2f}"
+        f"instrumental={s.get('instrumentalness', 0.0):.2f}{retrieval(s)}"
         for s in sample
     ]
     suffix = "" if len(songs) <= limit else f"\n  ... and {len(songs) - limit} more"
@@ -84,12 +97,16 @@ def plan_query(query: str, profile: Dict[str, Any]) -> Plan:
     )
 
 
-def check_candidates(plan: Plan, candidates: List[Dict[str, Any]]) -> CheckVerdict:
+def check_candidates(
+    plan: Plan,
+    candidates: List[Dict[str, Any]],
+    hits: Optional[Dict[int, SongHit]] = None,
+) -> CheckVerdict:
     """Act 3: judge whether the candidates plausibly satisfy the plan."""
     system = client.load_prompt("check")
     user = (
         f"Plan:\n{plan.model_dump_json(indent=2)}\n\n"
-        f"Candidates returned ({len(candidates)} songs):\n{_candidate_summary(candidates)}\n\n"
+        f"Candidates returned ({len(candidates)} songs):\n{_candidate_summary(candidates, hits)}\n\n"
         f"Emit the CheckVerdict."
     )
     return client.call_messages_parsed(
@@ -250,35 +267,67 @@ def _should_refine(verdict: CheckVerdict) -> bool:
     )
 
 
+def _ground(
+    query: str,
+    plan: Plan,
+    songs: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    profile: Dict[str, Any],
+) -> Dict[int, SongHit]:
+    """Score every candidate against the query (and taste, if known) with the hybrid
+    retriever. Runs for all tools, so structured-filter results get evidence too."""
+    if not candidates:
+        return {}
+    retriever = get_retriever(songs, _history_docs(profile))
+    hits = retriever.search(
+        plan.semantic_query or query,
+        candidates,
+        taste_vector=profile.get("taste_vector"),
+    )
+    return {h.song_id: h for h in hits}
+
+
+def _history_docs(profile: Dict[str, Any]) -> List[Document]:
+    return [Document(**d) for d in profile.get("history_docs") or []]
+
+
 def _execute_pass(
     plan: Plan,
     songs: List[Dict[str, Any]],
     trace: TraceRecorder,
     *,
+    query: str,
+    profile: Dict[str, Any],
     iteration: int,
     fast_check: bool,
     llm_available: bool,
-) -> tuple[Plan, List[Dict[str, Any]], CheckVerdict]:
+) -> tuple[Plan, List[Dict[str, Any]], CheckVerdict, Dict[int, SongHit]]:
     trace.record("plan", iteration=iteration, plan=plan.model_dump())
     with trace.stage("retrieve"):
         candidates = dispatch.call(plan.chosen_tool, plan, songs)
+        hits = _ground(query, plan, songs, candidates, profile)
     trace.record(
         "act",
         iteration=iteration,
         tool=plan.chosen_tool,
         candidate_count=len(candidates),
         candidate_ids=[s["id"] for s in candidates],
+        retrieval=[
+            {k: v for k, v in h.to_dict().items() if k != "evidence"}
+            for h in sorted(hits.values(), key=lambda h: -h.rrf)[:10]
+        ],
     )
 
     with trace.stage("check"):
-        verdict, source = _check(plan, candidates, fast_check=fast_check, llm_available=llm_available)
+        verdict, source = _check(plan, candidates, hits, fast_check=fast_check, llm_available=llm_available)
     trace.record("check", iteration=iteration, source=source, verdict=verdict.model_dump())
-    return plan, candidates, verdict
+    return plan, candidates, verdict, hits
 
 
 def _check(
     plan: Plan,
     candidates: List[Dict[str, Any]],
+    hits: Dict[int, SongHit],
     *,
     fast_check: bool,
     llm_available: bool,
@@ -292,7 +341,7 @@ def _check(
             return verdict, "deterministic"
     if llm_available:
         try:
-            return check_candidates(plan, candidates), "llm"
+            return check_candidates(plan, candidates, hits), "llm"
         except Exception:
             pass
     return _count_only_verdict(plan, candidates), "count_only"
@@ -334,14 +383,17 @@ def run(
     current_plan = _plan(query, profile, trace, llm_available)
     plan_used = current_plan
     candidates: List[Dict[str, Any]] = []
+    hits: Dict[int, SongHit] = {}
     verdict = _synthesize_empty_verdict()
     seen_plans = {current_plan.model_dump_json()}
 
     for iteration in range(max_refines + 1):
-        plan_used, candidates, verdict = _execute_pass(
+        plan_used, candidates, verdict, hits = _execute_pass(
             current_plan,
             songs,
             trace,
+            query=query,
+            profile=profile,
             iteration=iteration,
             fast_check=fast_check,
             llm_available=llm_available,
@@ -376,17 +428,7 @@ def run(
         current_plan = refined_plan
 
     with trace.stage("rank"):
-        prefs = _profile_to_prefs(profile)
-        ranked = recommend_songs(prefs, candidates, k=k) if candidates else []
-        recommendations = [
-            Recommendation(
-                song=song,
-                score=score,
-                signal_explanation=breakdown,
-                narrative=explainer.templated_fallback(song=song, breakdown=breakdown, verdict=verdict),
-            )
-            for song, score, breakdown in ranked
-        ]
+        recommendations = _rank(profile, candidates, hits, verdict, k=k)
 
     result = AgentResult(
         query=query,
@@ -395,6 +437,8 @@ def run(
         candidate_count=len(candidates),
         verdict=verdict,
         recommendations=recommendations,
+        candidates=candidates,
+        hits={sid: h.to_dict() for sid, h in hits.items()},
     )
     if use_llm_explainer and llm_available:
         explain_result(result, trace=trace)
@@ -402,6 +446,77 @@ def run(
     result.trace_events = trace.snapshot()
     result.timings_ms = {**trace.timings, "total": trace.total_ms()}
     return result
+
+
+def _rank(
+    profile: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+    hits: Dict[int, SongHit],
+    verdict: CheckVerdict,
+    *,
+    k: int,
+) -> List[Recommendation]:
+    """Additive rerank, then attach evidence and a grounded (non-LLM) explanation."""
+    if not candidates:
+        return []
+    recently_played = profile.get("recently_played")
+    ranked = rerank(
+        _profile_to_prefs(profile),
+        candidates,
+        {sid: h.to_dict() for sid, h in hits.items()},
+        k=k,
+        has_taste=profile.get("taste_vector") is not None,
+        recently_played=set(recently_played) if recently_played is not None else None,
+    )
+    low_confidence = _is_low_confidence(verdict)
+    out = []
+    for song, score, signals, breakdown_text in ranked:
+        hit = hits.get(song["id"])
+        signal_dicts = [s.to_dict() for s in signals]
+        evidence = [vars(e).copy() for e in hit.evidence] if hit else []
+        claims = citations.grounded_claims(signal_dicts, evidence, low_confidence=low_confidence)
+        out.append(Recommendation(
+            song=song,
+            score=score,
+            signal_explanation=breakdown_text,
+            narrative=citations.render(claims),
+            signals=signal_dicts,
+            evidence=evidence,
+            retrieval={k_: v for k_, v in hit.to_dict().items() if k_ != "evidence"} if hit else None,
+            claims=claims,
+        ))
+    return out
+
+
+def what_if(result: AgentResult, exclude: set, *, k: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Re-rank the final candidate pool without some signals. Returns rank movements."""
+    profile = result.profile
+    recently_played = profile.get("recently_played")
+    kwargs = dict(
+        has_taste=profile.get("taste_vector") is not None,
+        recently_played=set(recently_played) if recently_played is not None else None,
+    )
+    k = k or len(result.recommendations)
+    prefs = _profile_to_prefs(profile)
+    before = rerank(prefs, result.candidates, result.hits, k=k, **kwargs)
+    after = rerank(prefs, result.candidates, result.hits, k=k, exclude=exclude, **kwargs)
+    old_rank = {song["id"]: i for i, (song, *_rest) in enumerate(before, 1)}
+    return [
+        {
+            "rank": i,
+            "song_id": song["id"],
+            "title": song["title"],
+            "score": score,
+            "previous_rank": old_rank.get(song["id"]),
+        }
+        for i, (song, score, *_rest) in enumerate(after, 1)
+    ]
+
+
+def _is_low_confidence(verdict: CheckVerdict) -> bool:
+    return verdict.confidence < 0.6 or bool(
+        {CheckFlag.INTENT_MISMATCH, CheckFlag.CONSTRAINT_VIOLATED} & set(verdict.flags)
+    )
 
 
 def explain_result(result: AgentResult, *, trace: Optional[TraceRecorder] = None) -> AgentResult:
@@ -426,12 +541,12 @@ def explain_result(result: AgentResult, *, trace: Optional[TraceRecorder] = None
 
 def _explain_into(result: AgentResult, trace: TraceRecorder) -> None:
     items = [
-        {"song": rec.song, "score": rec.score, "breakdown": rec.signal_explanation}
+        {"song": rec.song, "score": rec.score, "signals": rec.signals, "evidence": rec.evidence}
         for rec in result.recommendations
     ]
     with trace.stage("explain"):
         try:
-            narratives = explainer.explain_batch(
+            raw = explainer.explain_batch(
                 query=result.query,
                 profile_summary=_profile_summary(result.profile),
                 items=items,
@@ -440,10 +555,28 @@ def _explain_into(result: AgentResult, trace: TraceRecorder) -> None:
         except Exception as e:
             trace.record("explainer_fallback", error=str(e))
             return
-    missing = [rec.song["id"] for rec in result.recommendations if rec.song["id"] not in narratives]
-    if missing:
-        trace.record("explainer_fallback", song_ids=missing, error="no narrative returned")
+
+    kept_total = dropped_total = 0
+    fallback_ids = []
     for rec in result.recommendations:
-        if rec.song["id"] in narratives:
-            rec.narrative = narratives[rec.song["id"]]
-    result.narratives_from_llm = bool(narratives)
+        allowed = citations.evidence_ids(rec.signals, rec.evidence)
+        kept, dropped = citations.validate(raw.get(rec.song["id"], []), allowed)
+        kept_total += len(kept)
+        dropped_total += len(dropped)
+        rec.dropped_claims = dropped
+        if kept:
+            rec.claims = kept
+            rec.narrative = citations.render(kept)
+        else:
+            fallback_ids.append(rec.song["id"])  # keep the grounded claims from _rank
+    trace.record(
+        "citations",
+        kept=kept_total,
+        dropped=dropped_total,
+        dropped_claims=[
+            {"song_id": rec.song["id"], **d} for rec in result.recommendations for d in rec.dropped_claims
+        ],
+    )
+    if fallback_ids:
+        trace.record("explainer_fallback", song_ids=fallback_ids, error="no valid cited claims returned")
+    result.narratives_from_llm = len(fallback_ids) < len(result.recommendations)

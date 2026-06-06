@@ -45,14 +45,22 @@ class SemanticPicks(BaseModel):
     song_ids: List[int] = Field(default_factory=list)
 
 
-class SongNarrative(BaseModel):
+class Claim(BaseModel):
+    text: str = Field(description="One short factual sentence about why the song fits.")
+    evidence_ids: List[str] = Field(
+        default_factory=list,
+        description="Ids of the evidence items that support this claim, e.g. 'sig:energy', 'artist:bicep'.",
+    )
+
+
+class SongExplanation(BaseModel):
     song_id: int
-    narrative: str
+    claims: List[Claim] = Field(default_factory=list)
 
 
-class BatchNarratives(BaseModel):
-    """Wire format for the batched explainer: one narrative per recommended song."""
-    narratives: List[SongNarrative] = Field(default_factory=list)
+class BatchExplanations(BaseModel):
+    """Wire format for the batched explainer: cited claims for every recommended song."""
+    explanations: List[SongExplanation] = Field(default_factory=list)
 
 
 @dataclass
@@ -60,7 +68,12 @@ class Recommendation:
     song: Dict[str, Any]
     score: float
     signal_explanation: str       # from the deterministic rule-based scorer
-    narrative: str                 # from the LLM explainer (or templated fallback)
+    narrative: str                 # rendered from claims (LLM or grounded fallback)
+    signals: List[Dict[str, Any]] = field(default_factory=list)      # additive score parts
+    evidence: List[Dict[str, Any]] = field(default_factory=list)     # retrieved docs
+    retrieval: Optional[Dict[str, Any]] = None                       # ranks, matched terms
+    claims: List[Dict[str, Any]] = field(default_factory=list)       # validated, cited
+    dropped_claims: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -74,3 +87,6 @@ class AgentResult:
     trace_events: List[Dict[str, Any]] = field(default_factory=list)
     timings_ms: Dict[str, int] = field(default_factory=dict)
     narratives_from_llm: bool = False
+    # Full final candidate pool + retrieval hits, so the UI can re-rank ("what if")
+    candidates: List[Dict[str, Any]] = field(default_factory=list)
+    hits: Dict[int, Dict[str, Any]] = field(default_factory=dict)

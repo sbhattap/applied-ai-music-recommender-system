@@ -5,7 +5,7 @@ You judge whether the candidates returned by a tool plausibly satisfy the plan t
 ## Inputs you receive
 
 - The original `Plan` (intent, chosen_tool, constraints, expected_count_min/max)
-- The candidate songs returned by the tool (title, artist, genre, mood, BPM, energy, etc.)
+- The candidate songs returned by the tool (title, artist, genre, mood, BPM, energy, etc.). When retrieval ran, each also has `query_match` (1.0 = best match in this set) and how it was found (`dense` = semantic similarity, `bm25` = keyword match, `both`).
 
 ## Output shape
 

@@ -4,11 +4,12 @@ import pytest
 
 from src.recommender.llm import agent
 from src.recommender.llm.types import (
-    BatchNarratives,
+    BatchExplanations,
     CheckFlag,
     CheckVerdict,
+    Claim,
     Plan,
-    SongNarrative,
+    SongExplanation,
 )
 
 
@@ -61,11 +62,15 @@ def _stub_llm(monkeypatch, *, plan: Plan, verdict: CheckVerdict, narrative: str 
             return plan
         if schema.__name__ == "CheckVerdict":
             return verdict
-        if schema.__name__ == "BatchNarratives":
+        if schema.__name__ == "BatchExplanations":
             ids = [int(line.split("song_id=")[1].split(":")[0])
                    for line in user.splitlines() if "song_id=" in line]
-            return BatchNarratives(narratives=[
-                SongNarrative(song_id=i, narrative=narrative) for i in ids
+            return BatchExplanations(explanations=[
+                SongExplanation(song_id=i, claims=[
+                    Claim(text=narrative, evidence_ids=[f"song:{i}"]),
+                    Claim(text="Made-up fact.", evidence_ids=["artist:nobody"]),
+                ])
+                for i in ids
             ])
         raise AssertionError(f"unexpected schema: {schema.__name__}")
 
@@ -103,6 +108,13 @@ def test_full_loop_structured_filter_path(monkeypatch, songs, profile):
     assert labels.count("explainer") == 1
     assert all(rec.narrative == "Because lofi." for rec in result.recommendations)
     assert result.narratives_from_llm
+    # the claim citing evidence that was never retrieved is dropped, and traced
+    for rec in result.recommendations:
+        assert [d["text"] for d in rec.dropped_claims] == ["Made-up fact."]
+        assert rec.claims[0]["evidence_ids"] == [f"song:{rec.song['id']}"]
+        assert sum(s["contribution"] for s in rec.signals) == pytest.approx(rec.score, abs=1e-3)
+    cites = next(ev for ev in result.trace_events if ev["kind"] == "citations")
+    assert cites["kept"] == 2 and cites["dropped"] == 2
     assert {"plan", "retrieve", "check", "rank", "explain", "total"} <= set(result.timings_ms)
 
 

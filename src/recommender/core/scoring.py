@@ -48,15 +48,8 @@ STRATEGY_WEIGHTS: Dict[str, Dict[str, float]] = {
 }
 
 
-def score_song(user_prefs: Dict, song: Dict,
-               weights: Optional[Dict[str, float]] = None) -> float:
-    """Weighted compatibility score in [0.0, 1.0].
-
-    Pass a custom ``weights`` dict to override DEFAULT_WEIGHTS. Weights need
-    not sum to 1.0 — only relative magnitude matters for ranking.
-    """
-    w = weights if weights is not None else DEFAULT_WEIGHTS
-
+def signal_values(user_prefs: Dict, song: Dict) -> Dict[str, float]:
+    """Per-signal match values in [0.0, 1.0], before weighting."""
     genre_match = 1.0 if song["genre"] == user_prefs.get("genre") else 0.0
 
     mood = user_prefs.get("mood", "")
@@ -70,7 +63,6 @@ def score_song(user_prefs: Dict, song: Dict,
     energy_proximity = 1.0 - abs(song["energy"] - user_prefs.get("energy", 0.5))
     likes_acoustic = user_prefs.get("likes_acoustic", False)
     acousticness_fit = song["acousticness"] if likes_acoustic else (1.0 - song["acousticness"])
-    danceability_score = song["danceability"]
 
     target_valence = user_prefs.get("target_valence", 0.5)
     valence_proximity = 1.0 - abs(song.get("valence", 0.5) - target_valence)
@@ -79,15 +71,27 @@ def score_song(user_prefs: Dict, song: Dict,
     pop_norm = song.get("popularity", 50) / 100
     popularity_fit = pop_norm if prefer_popular else (1.0 - pop_norm)
 
-    return (
-        genre_match        * w.get("genre", 0) +
-        mood_match         * w.get("mood", 0) +
-        energy_proximity   * w.get("energy", 0) +
-        acousticness_fit   * w.get("acousticness", 0) +
-        danceability_score * w.get("danceability", 0) +
-        valence_proximity  * w.get("valence", 0) +
-        popularity_fit     * w.get("popularity", 0)
-    )
+    return {
+        "genre": genre_match,
+        "mood": mood_match,
+        "energy": energy_proximity,
+        "acousticness": acousticness_fit,
+        "danceability": song["danceability"],
+        "valence": valence_proximity,
+        "popularity": popularity_fit,
+    }
+
+
+def score_song(user_prefs: Dict, song: Dict,
+               weights: Optional[Dict[str, float]] = None) -> float:
+    """Weighted compatibility score in [0.0, 1.0].
+
+    Pass a custom ``weights`` dict to override DEFAULT_WEIGHTS. Weights need
+    not sum to 1.0 — only relative magnitude matters for ranking.
+    """
+    w = weights if weights is not None else DEFAULT_WEIGHTS
+    values = signal_values(user_prefs, song)
+    return sum(values[name] * w.get(name, 0) for name in values)
 
 
 def explain_song(user_prefs: Dict, song: Dict) -> str:

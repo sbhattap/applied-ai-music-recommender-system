@@ -1,5 +1,6 @@
 from .types import (
     AgentResult,
+    BatchExplanations,
     CheckFlag,
     CheckVerdict,
     Plan,
@@ -9,6 +10,7 @@ from .types import (
 
 __all__ = [
     "AgentResult",
+    "BatchExplanations",
     "CheckFlag",
     "CheckVerdict",
     "Plan",

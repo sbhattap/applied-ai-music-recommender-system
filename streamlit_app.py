@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+import html
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -14,8 +15,10 @@ import streamlit as st
 
 from src.recommender import config
 from src.recommender.core.io import load_songs
+from src.recommender.core.rerank import SIGNAL_LABELS
 from src.recommender.llm import agent
 from src.recommender.main import PROFILES
+from src.recommender.rag import get_retriever
 
 
 st.set_page_config(
@@ -269,6 +272,23 @@ def _inject_styles() -> None:
             color: var(--text-soft);
             line-height: 1.5;
         }
+        .cite {
+            display: inline-block;
+            margin-left: 0.15rem;
+            padding: 0 0.32rem;
+            border-radius: 0.4rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            vertical-align: super;
+            color: var(--text-dark);
+            background: var(--accent-lilac);
+        }
+        .evidence-item {
+            margin: 0.35rem 0;
+            font-size: 0.9rem;
+            color: var(--text-soft);
+        }
+        .evidence-item b { color: var(--text-main); }
         </style>
         """,
         unsafe_allow_html=True,
@@ -282,6 +302,13 @@ def _load_catalog(csv_path: str) -> List[Dict[str, Any]]:
 
 # Results are cached on primitive inputs, so re-running the same query (or any widget
 # interaction that triggers a Streamlit rerun) costs nothing.
+@st.cache_resource(show_spinner="Loading retrieval index...")
+def _warm_retriever(csv_path: str) -> bool:
+    """Load the embedding model and catalog vectors once per server, not per query."""
+    get_retriever(_load_catalog(csv_path)).search("warm up")
+    return True
+
+
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
 def _run_ranked(query: str, profile_key: str, k: int, songs_path: str) -> agent.AgentResult:
     songs = _load_catalog(songs_path)
@@ -409,6 +436,92 @@ def _render_status_summary(result: agent.AgentResult) -> None:
     )
 
 
+SOURCE_LABELS = {
+    "catalog": "Catalog",
+    "wikipedia": "Wikipedia",
+    "lastfm": "Last.fm",
+    "spotify": "Your Spotify",
+}
+
+
+def _citation_numbers(rec) -> Dict[str, int]:
+    """Number evidence in the order claims first cite it: signals and documents alike."""
+    numbers: Dict[str, int] = {}
+    for claim in rec.claims:
+        for eid in claim["evidence_ids"]:
+            numbers.setdefault(eid, len(numbers) + 1)
+    return numbers
+
+
+def _claims_html(rec, numbers: Dict[str, int]) -> str:
+    parts = []
+    for claim in rec.claims:
+        chips = "".join(
+            f'<span class="cite">{numbers[eid]}</span>' for eid in claim["evidence_ids"] if eid in numbers
+        )
+        parts.append(f"{html.escape(claim['text'])}{chips}")
+    return " ".join(parts) if parts else html.escape(rec.narrative)
+
+
+def _found_by(rec) -> str:
+    r = rec.retrieval
+    if not r:
+        return ""
+    return {"both": "semantic + keyword", "dense": "semantic", "bm25": "keyword"}[r["found_by"]]
+
+
+def _render_why(rec, numbers: Dict[str, int]) -> None:
+    signals = rec.signals
+    if signals:
+        st.markdown("**Score breakdown**: each bar is weight × value; bars sum to the score.")
+        chart = pd.Series(
+            {s["label"]: s["contribution"] for s in signals if s["contribution"] > 0}, name="contribution"
+        )
+        st.bar_chart(chart, horizontal=True, height=min(60 + 28 * len(chart), 320))
+        st.dataframe(
+            pd.DataFrame([
+                {"Signal": s["label"], "Value": s["value"], "Weight": s["weight"],
+                 "Contribution": s["contribution"], "Detail": s["detail"]}
+                for s in signals
+            ]),
+            hide_index=True,
+            width="stretch",
+        )
+
+    r = rec.retrieval
+    if r:
+        ranks = [f"semantic rank #{r['dense_rank']}"]
+        if r.get("bm25_rank"):
+            ranks.append(f"keyword rank #{r['bm25_rank']}")
+        terms = f" · matched terms: `{'`, `'.join(r['matched_terms'])}`" if r["matched_terms"] else ""
+        st.markdown(f"**Retrieval**: found by {_found_by(rec)} ({', '.join(ranks)}){terms}")
+
+    if rec.evidence or numbers:
+        st.markdown("**Evidence**")
+        signal_by_id = {f"sig:{s['name']}": s for s in signals}
+        doc_by_id = {d["doc_id"]: d for d in rec.evidence}
+        ordered = list(numbers) + [d["doc_id"] for d in rec.evidence if d["doc_id"] not in numbers]
+        for eid in ordered:
+            label = f"[{numbers[eid]}]" if eid in numbers else "·"
+            if eid in signal_by_id:
+                s = signal_by_id[eid]
+                body = f"<b>{label} Score signal: {html.escape(s['label'])}</b>: {html.escape(s['detail'])}"
+            elif eid in doc_by_id:
+                d = doc_by_id[eid]
+                src = SOURCE_LABELS.get(d["source"], d["source"])
+                link = f' <a href="{html.escape(d["url"])}" target="_blank">source</a>' if d.get("url") else ""
+                body = (f"<b>{label} {src}: {html.escape(d['title'])}</b> "
+                        f"(similarity {d['score']:.2f}){link}<br>{html.escape(d['text'])}")
+            else:
+                continue
+            st.markdown(f'<div class="evidence-item">{body}</div>', unsafe_allow_html=True)
+
+    if rec.dropped_claims:
+        st.markdown("**Dropped claims** (failed citation check)")
+        for d in rec.dropped_claims:
+            st.caption(f"✗ {d['text']} ({d['reason']})")
+
+
 def _render_recommendation_cards(result: agent.AgentResult) -> None:
     if not result.recommendations:
         st.warning("No recommendations were returned for this query.")
@@ -417,26 +530,61 @@ def _render_recommendation_cards(result: agent.AgentResult) -> None:
     cols = st.columns(2)
     for index, rec in enumerate(result.recommendations):
         song = rec.song
+        numbers = _citation_numbers(rec)
+        found_by = _found_by(rec)
         with cols[index % 2]:
             st.markdown(
                 f"""
                 <div class="rec-card">
                   <div class="rec-kicker">Recommendation {index + 1}</div>
-                  <div class="rec-title">{song['title']}</div>
-                  <div class="rec-meta">{song['artist']}</div>
+                  <div class="rec-title">{html.escape(song['title'])}</div>
+                  <div class="rec-meta">{html.escape(song['artist'])}</div>
                   <div class="pill-row">
-                    <span class="pill">{song['genre']}</span>
-                    <span class="pill">{song['mood']}</span>
+                    <span class="pill">{html.escape(song['genre'])}</span>
+                    <span class="pill">{html.escape(song['mood'])}</span>
                     <span class="pill">score {rec.score:.3f}</span>
-                    <span class="pill">instrumental {song.get('instrumentalness', 0.0):.2f}</span>
+                    {f'<span class="pill">found by {found_by}</span>' if found_by else ''}
                   </div>
-                  <div class="rec-body">{rec.narrative}</div>
+                  <div class="rec-body">{_claims_html(rec, numbers)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-            with st.expander("Why this matched"):
-                st.write(rec.signal_explanation)
+            with st.expander("Why this song"):
+                _render_why(rec, numbers)
+
+
+def _render_what_if(result: agent.AgentResult) -> None:
+    if not result.recommendations or not result.candidates:
+        return
+    st.subheader("What If")
+    available = [s["name"] for s in result.recommendations[0].signals]
+    exclude = st.multiselect(
+        "Remove signals and re-rank the same candidates",
+        options=available,
+        format_func=lambda n: SIGNAL_LABELS.get(n, n),
+        key="what_if_exclude",
+    )
+    if not exclude:
+        st.caption(f"{len(result.candidates)} candidates in the pool. Pick a signal to see how the ranking shifts.")
+        return
+    rows = agent.what_if(result, set(exclude))
+
+    def movement(row) -> str:
+        prev = row["previous_rank"]
+        if prev is None:
+            return "new"
+        delta = prev - row["rank"]
+        return "same" if delta == 0 else f"up {delta}" if delta > 0 else f"down {-delta}"
+
+    st.dataframe(
+        pd.DataFrame([
+            {"Rank": r["rank"], "Song": r["title"], "Score": r["score"], "Change": movement(r)}
+            for r in rows
+        ]),
+        hide_index=True,
+        width="stretch",
+    )
 
 
 def _render_trace(result: agent.AgentResult) -> None:
@@ -472,7 +620,7 @@ def _render_sidebar() -> Dict[str, Any]:
     k = st.sidebar.slider("Recommendations", min_value=1, max_value=10, value=5)
     use_llm_explainer = st.sidebar.checkbox("Use LLM explainer", value=True)
     songs_path = st.sidebar.text_input("Songs CSV", value=str(config.SONGS_CSV))
-    run_clicked = st.sidebar.button("Generate Recommendations", use_container_width=True, type="primary")
+    run_clicked = st.sidebar.button("Generate Recommendations", width="stretch", type="primary")
 
     st.sidebar.markdown("---")
     profile = PROFILES[profile_key]
@@ -495,16 +643,21 @@ def main() -> None:
     _render_header()
     controls = _render_sidebar()
 
-    if not controls["run_clicked"]:
+    if controls["run_clicked"]:
+        if not controls["query"].strip():
+            st.warning("Enter a query before running the recommender.")
+            return
+        # Keep the submitted run so widget interactions (e.g. What If) rerender it
+        # instead of resetting the page; results come from the cache.
+        st.session_state["last_run"] = dict(controls)
+    if "last_run" not in st.session_state:
         st.info("Choose a query and profile in the sidebar, then click Generate Recommendations.")
         return
-
-    if not controls["query"].strip():
-        st.warning("Enter a query before running the recommender.")
-        return
+    controls = st.session_state["last_run"]
 
     try:
         _load_catalog(controls["songs_path"])
+        _warm_retriever(controls["songs_path"])
     except Exception as exc:
         st.error(f"Could not load the song catalog: {exc}")
         return
@@ -547,6 +700,7 @@ def main() -> None:
     st.subheader("Run Summary")
     _render_status_summary(result)
 
+    _render_what_if(result)
     _render_timings(result)
     _render_trace(result)
 
