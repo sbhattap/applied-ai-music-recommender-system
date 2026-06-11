@@ -132,3 +132,17 @@ def test_grounded_claims_cite_only_offered_evidence():
     assert len(kept) == 3 and not dropped
     assert claims[0]["text"].startswith("Closest match available")
     assert claims[2] == {"text": "A is a band.", "evidence_ids": ["artist:a"]}
+
+
+def test_query_match_spans_full_range(songs):
+    hits = Retriever(songs, build_documents(songs)).search("rain study lofi")
+    values = [h.query_match for h in hits]
+    assert max(values) == pytest.approx(1.0) and min(values) == pytest.approx(0.0)
+
+
+def test_unstated_preferences_do_not_score(songs):
+    prefs = {"genre": None, "mood": None, "energy": None, "likes_acoustic": None,
+             "target_valence": None, "prefer_popular": None}
+    hits = {h.song_id: h.to_dict() for h in Retriever(songs, build_documents(songs)).search("lofi")}
+    _, _, signals, _ = rerank(prefs, songs, hits, k=1)[0]
+    assert {s.name for s in signals} == {"query_match", "danceability"}

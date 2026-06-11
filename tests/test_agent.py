@@ -341,3 +341,20 @@ def test_refine_switches_to_structured_filter_on_constraint_violated(monkeypatch
     refine_events = [ev for ev in result.trace_events if ev["kind"] == "refine"]
     assert refine_events
     assert refine_events[0]["to_tool"] == "structured_filter"
+
+
+def test_genre_cap_relaxed_when_query_targets_a_genre(songs):
+    from src.recommender.rag.retriever import SongHit
+
+    def hit(i, rrf):
+        return SongHit(song_id=i, dense=0.5, bm25=0.0, dense_rank=i, bm25_rank=None,
+                       rrf=rrf, query_match=1.0, found_by="dense")
+
+    by_id = {s["id"]: s for s in songs}
+    plan = Plan(intent="x", chosen_tool="semantic_search", expected_count_min=1, expected_count_max=5)
+    lofi_heavy = {1: hit(1, 0.03), 2: hit(2, 0.02), 3: hit(3, 0.01)}  # 2 of 3 are lofi
+    assert agent.genre_cap(plan, lofi_heavy, by_id) is None
+    mixed = {1: hit(1, 0.03), 3: hit(3, 0.02)}
+    assert agent.genre_cap(plan, mixed, by_id) == 2
+    filtered = plan.model_copy(update={"genre_filter": ["rock"]})
+    assert agent.genre_cap(filtered, mixed, by_id) is None

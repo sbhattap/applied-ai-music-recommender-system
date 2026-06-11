@@ -1,0 +1,300 @@
+{
+  "n_queries": 24,
+  "n_songs": 180,
+  "embedder": "BAAI/bge-small-en-v1.5",
+  "retrieval": {
+    "bm25": {
+      "p@5": 0.6833,
+      "ndcg@10": 0.689,
+      "recall@20": 0.6308,
+      "mrr": 0.7579,
+      "p50_ms": 8.2
+    },
+    "dense": {
+      "p@5": 0.7,
+      "ndcg@10": 0.6913,
+      "recall@20": 0.7065,
+      "mrr": 0.8399,
+      "p50_ms": 8.2
+    },
+    "hybrid": {
+      "p@5": 0.7583,
+      "ndcg@10": 0.7611,
+      "recall@20": 0.7039,
+      "mrr": 0.8278,
+      "p50_ms": 8.2
+    }
+  },
+  "end_to_end": {
+    "llm_configured": false,
+    "p@5": 0.7583,
+    "llm_calls_per_query": 0.0,
+    "citation_valid_rate": 1.0,
+    "llm_explained_rate": 0.0,
+    "faithfulness": null,
+    "latency_ms": {
+      "plan": {
+        "p50": 0,
+        "p95": 0
+      },
+      "retrieve": {
+        "p50": 12,
+        "p95": 19
+      },
+      "check": {
+        "p50": 0,
+        "p95": 0
+      },
+      "rank": {
+        "p50": 0,
+        "p95": 0
+      },
+      "total": {
+        "p50": 13,
+        "p95": 19
+      }
+    },
+    "per_query": [
+      {
+        "id": "study-instrumental",
+        "query": "chill study music, no vocals",
+        "tool": "hybrid",
+        "p@5": 0.8,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 21
+      },
+      {
+        "id": "sleep",
+        "query": "calm music to fall asleep to",
+        "tool": "semantic_search",
+        "p@5": 0.0,
+        "n_relevant": 27,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 19
+      },
+      {
+        "id": "piano",
+        "query": "soft classical piano",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 16
+      },
+      {
+        "id": "workout",
+        "query": "high energy workout songs to push through a run",
+        "tool": "semantic_search",
+        "p@5": 0.4,
+        "n_relevant": 37,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 13
+      },
+      {
+        "id": "metal",
+        "query": "heavy aggressive metal",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "party",
+        "query": "upbeat dance party tracks",
+        "tool": "semantic_search",
+        "p@5": 0.6,
+        "n_relevant": 43,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 13
+      },
+      {
+        "id": "sad",
+        "query": "sad songs for a rainy day",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 41,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 15
+      },
+      {
+        "id": "kpop",
+        "query": "happy k-pop",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 10
+      },
+      {
+        "id": "latin",
+        "query": "reggaeton and latin hits",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 9
+      },
+      {
+        "id": "hiphop",
+        "query": "hip hop with a confident swagger",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 13
+      },
+      {
+        "id": "country-roadtrip",
+        "query": "country songs for a road trip",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 8
+      },
+      {
+        "id": "folk-acoustic",
+        "query": "acoustic folk, warm and gentle",
+        "tool": "semantic_search",
+        "p@5": 0.6,
+        "n_relevant": 5,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 19
+      },
+      {
+        "id": "jazz-evening",
+        "query": "smooth jazz for a quiet evening",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 8,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "blues",
+        "query": "classic blues guitar",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 11
+      },
+      {
+        "id": "funk-groove",
+        "query": "funky groove to dance to",
+        "tool": "semantic_search",
+        "p@5": 0.4,
+        "n_relevant": 8,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "reggae",
+        "query": "laid back reggae vibes",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 13
+      },
+      {
+        "id": "edm",
+        "query": "electronic club bangers",
+        "tool": "semantic_search",
+        "p@5": 0.2,
+        "n_relevant": 14,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 11
+      },
+      {
+        "id": "rock-anthem",
+        "query": "big rock anthems",
+        "tool": "semantic_search",
+        "p@5": 0.4,
+        "n_relevant": 17,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 11
+      },
+      {
+        "id": "lofi",
+        "query": "lofi beats",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 10,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 14
+      },
+      {
+        "id": "ambient-focus",
+        "query": "ambient soundscapes for deep focus",
+        "tool": "semantic_search",
+        "p@5": 0.8,
+        "n_relevant": 28,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "rnb-romantic",
+        "query": "romantic slow r&b",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 9,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 14
+      },
+      {
+        "id": "feel-good",
+        "query": "feel good songs that make me smile",
+        "tool": "semantic_search",
+        "p@5": 0.2,
+        "n_relevant": 50,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "introspective",
+        "query": "introspective late night indie",
+        "tool": "semantic_search",
+        "p@5": 0.8,
+        "n_relevant": 21,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 12
+      },
+      {
+        "id": "intense-latin",
+        "query": "intense latin trap",
+        "tool": "semantic_search",
+        "p@5": 1.0,
+        "n_relevant": 9,
+        "confidence": 0.6,
+        "llm_calls": 0,
+        "total_ms": 14
+      }
+    ]
+  }
+}

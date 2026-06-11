@@ -41,7 +41,7 @@ class SongHit:
     dense_rank: int
     bm25_rank: Optional[int]          # None when no query term matched
     rrf: float
-    query_match: float                # rrf / best rrf in this result set, in [0, 1]
+    query_match: float                # rrf min-max scaled over this result set: 1 best, 0 weakest
     found_by: str                     # "dense" | "bm25" | "both"
     matched_terms: List[str] = field(default_factory=list)
     taste_sim: Optional[float] = None
@@ -121,7 +121,10 @@ class Retriever:
             1 / (RRF_K + dense_rank[j]) + (1 / (RRF_K + bm25_rank[j]) if j in bm25_rank else 0.0)
             for j in range(len(ids))
         ])
-        best = float(rrf.max())
+        # RRF is flat near the top (rank 1 vs 12 differ by ~15%), so scale within the
+        # result set; otherwise query relevance barely moves the downstream rerank.
+        lo, hi = float(rrf.min()), float(rrf.max())
+        span = hi - lo
 
         taste = None
         if taste_vector is not None:
@@ -141,7 +144,7 @@ class Retriever:
                 dense_rank=int(dense_rank[j]),
                 bm25_rank=bm25_rank.get(j),
                 rrf=round(float(rrf[j]), 6),
-                query_match=round(float(rrf[j]) / best, 4) if best else 0.0,
+                query_match=round((float(rrf[j]) - lo) / span, 4) if span > 0 else 1.0,
                 found_by="both" if in_dense and in_bm25 else "bm25" if in_bm25 and not in_dense else "dense",
                 matched_terms=self._bm25.matched_terms(query, self._pos[ids[j]]),
                 taste_sim=round(taste[j], 4) if taste is not None else None,

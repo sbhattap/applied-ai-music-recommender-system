@@ -48,11 +48,20 @@ STRATEGY_WEIGHTS: Dict[str, Dict[str, float]] = {
 }
 
 
+def _pref(user_prefs: Dict, key: str, default):
+    value = user_prefs.get(key)
+    return default if value is None else value
+
+
 def signal_values(user_prefs: Dict, song: Dict) -> Dict[str, float]:
-    """Per-signal match values in [0.0, 1.0], before weighting."""
+    """Per-signal match values in [0.0, 1.0], before weighting.
+
+    Unstated preferences (missing or None) fall back to neutral defaults; the RAG
+    reranker additionally drops those signals from its weights.
+    """
     genre_match = 1.0 if song["genre"] == user_prefs.get("genre") else 0.0
 
-    mood = user_prefs.get("mood", "")
+    mood = _pref(user_prefs, "mood", "")
     if song["mood"] == mood:
         mood_match = 1.0
     elif mood in song.get("mood_tags", "").split("|"):
@@ -60,14 +69,14 @@ def signal_values(user_prefs: Dict, song: Dict) -> Dict[str, float]:
     else:
         mood_match = 0.0
 
-    energy_proximity = 1.0 - abs(song["energy"] - user_prefs.get("energy", 0.5))
-    likes_acoustic = user_prefs.get("likes_acoustic", False)
+    energy_proximity = 1.0 - abs(song["energy"] - _pref(user_prefs, "energy", 0.5))
+    likes_acoustic = _pref(user_prefs, "likes_acoustic", False)
     acousticness_fit = song["acousticness"] if likes_acoustic else (1.0 - song["acousticness"])
 
-    target_valence = user_prefs.get("target_valence", 0.5)
+    target_valence = _pref(user_prefs, "target_valence", 0.5)
     valence_proximity = 1.0 - abs(song.get("valence", 0.5) - target_valence)
 
-    prefer_popular = user_prefs.get("prefer_popular", True)
+    prefer_popular = _pref(user_prefs, "prefer_popular", True)
     pop_norm = song.get("popularity", 50) / 100
     popularity_fit = pop_norm if prefer_popular else (1.0 - pop_norm)
 
@@ -101,18 +110,19 @@ def explain_song(user_prefs: Dict, song: Dict) -> str:
         reasons.append(f"it's {song['genre']} (your favorite genre)")
     if song["mood"] == user_prefs.get("mood"):
         reasons.append(f"it matches your {song['mood']} mood preference")
-    if abs(song["energy"] - user_prefs.get("energy", 0.5)) <= 0.15:
+    if abs(song["energy"] - _pref(user_prefs, "energy", 0.5)) <= 0.15:
         reasons.append(f"its energy ({song['energy']}) is close to your target")
     if user_prefs.get("likes_acoustic") and song["acousticness"] >= 0.6:
         reasons.append("it has a strong acoustic feel")
     if not user_prefs.get("likes_acoustic") and song["acousticness"] <= 0.3:
         reasons.append("it has a non-acoustic, produced sound")
-    target_valence = user_prefs.get("target_valence", 0.5)
+    target_valence = _pref(user_prefs, "target_valence", 0.5)
     if abs(song.get("valence", 0.5) - target_valence) <= 0.15:
         reasons.append(f"its emotional tone (valence {song.get('valence', 0.5):.2f}) matches your preference")
-    if user_prefs.get("prefer_popular", True) and song.get("popularity", 50) >= 70:
+    prefer_popular = _pref(user_prefs, "prefer_popular", True)
+    if prefer_popular and song.get("popularity", 50) >= 70:
         reasons.append(f"it's a popular track (popularity {song.get('popularity', 50)})")
-    elif not user_prefs.get("prefer_popular", True) and song.get("popularity", 50) <= 40:
+    elif not prefer_popular and song.get("popularity", 50) <= 40:
         reasons.append("it's an underground or niche pick")
     if not reasons:
         reasons.append("it closely matches your overall listening profile")

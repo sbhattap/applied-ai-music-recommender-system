@@ -20,14 +20,33 @@ from .types import (
 
 
 def _profile_to_prefs(profile: Dict[str, Any]) -> Dict[str, Any]:
+    # Missing keys stay None: the reranker ignores preferences the listener never stated.
     return {
         "genre": profile.get("genre"),
         "mood": profile.get("mood"),
         "energy": profile.get("energy"),
-        "likes_acoustic": profile.get("likes_acoustic", False),
-        "target_valence": profile.get("target_valence", 0.5),
-        "prefer_popular": profile.get("prefer_popular", True),
+        "likes_acoustic": profile.get("likes_acoustic"),
+        "target_valence": profile.get("target_valence"),
+        "prefer_popular": profile.get("prefer_popular"),
     }
+
+
+GENRE_FOCUS_SHARE = 0.6
+
+
+def genre_cap(plan: Plan, hits: Dict[int, SongHit], songs_by_id: Dict[int, Dict[str, Any]]) -> Optional[int]:
+    """Per-genre diversity cap, or None when the request is about a genre.
+
+    Off if the plan filters on genre, or if most of the top retrieved songs share one
+    genre (the query itself targets it, e.g. "heavy metal").
+    """
+    if plan.genre_filter:
+        return None
+    top = sorted(hits.values(), key=lambda h: -h.rrf)[:10]
+    genres = [songs_by_id[h.song_id]["genre"] for h in top if h.song_id in songs_by_id]
+    if genres and max(genres.count(g) for g in set(genres)) / len(genres) >= GENRE_FOCUS_SHARE:
+        return None
+    return 2
 
 
 def _profile_summary(profile: Dict[str, Any]) -> str:
@@ -428,7 +447,10 @@ def run(
         current_plan = refined_plan
 
     with trace.stage("rank"):
-        recommendations = _rank(profile, candidates, hits, verdict, k=k)
+        cap = genre_cap(plan_used, hits, {s["id"]: s for s in candidates})
+        trace.record("rank", diversity_cap=cap,
+                     reason="per-genre cap" if cap else "request targets a genre; no cap")
+        recommendations = _rank(profile, candidates, hits, verdict, k=k, max_per_genre=cap)
 
     result = AgentResult(
         query=query,
@@ -455,6 +477,7 @@ def _rank(
     verdict: CheckVerdict,
     *,
     k: int,
+    max_per_genre: Optional[int] = 2,
 ) -> List[Recommendation]:
     """Additive rerank, then attach evidence and a grounded (non-LLM) explanation."""
     if not candidates:
@@ -467,6 +490,7 @@ def _rank(
         k=k,
         has_taste=profile.get("taste_vector") is not None,
         recently_played=set(recently_played) if recently_played is not None else None,
+        max_per_genre=max_per_genre,
     )
     low_confidence = _is_low_confidence(verdict)
     out = []
@@ -492,9 +516,11 @@ def what_if(result: AgentResult, exclude: set, *, k: Optional[int] = None) -> Li
     """Re-rank the final candidate pool without some signals. Returns rank movements."""
     profile = result.profile
     recently_played = profile.get("recently_played")
+    rank_event = next((e for e in result.trace_events if e["kind"] == "rank"), {})
     kwargs = dict(
         has_taste=profile.get("taste_vector") is not None,
         recently_played=set(recently_played) if recently_played is not None else None,
+        max_per_genre=rank_event.get("diversity_cap", 2),
     )
     k = k or len(result.recommendations)
     prefs = _profile_to_prefs(profile)
