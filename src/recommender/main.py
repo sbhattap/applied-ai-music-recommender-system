@@ -77,6 +77,23 @@ def _print_trace(events):
     print()
 
 
+def _spotify_profile(songs):
+    from .spotify import SpotifyClient, TokenStore, build_profile
+    from .spotify import auth
+
+    store = TokenStore()
+    tokens = store.valid()
+    if tokens is None:
+        raise RuntimeError("Not logged in to Spotify. Run: uv run python scripts/spotify_login.py")
+
+    def on_refresh(t):
+        fresh = auth.refresh(t)
+        store.save(fresh)
+        return fresh
+
+    return build_profile(SpotifyClient(tokens, on_refresh=on_refresh).fetch_history(), songs)
+
+
 def _print_timings(timings):
     if not timings:
         return
@@ -106,12 +123,20 @@ def main(argv=None):
     parser.add_argument("--k", type=int, default=5, help="Number of recommendations to return")
     parser.add_argument("--no-llm-explainer", action="store_true",
                         help="Skip the LLM explainer; use templated narratives")
+    parser.add_argument("--spotify", action="store_true",
+                        help="Use your Spotify listening history (run scripts/spotify_login.py first)")
     parser.add_argument("--songs", default=str(config.SONGS_CSV),
                         help="Path to songs.csv")
     args = parser.parse_args(argv)
 
-    profile = PROFILES[args.profile]
     songs = load_songs(args.songs)
+    profile = PROFILES[args.profile]
+    if args.spotify:
+        try:
+            profile = _spotify_profile(songs)
+        except (RuntimeError, ValueError) as e:
+            print(f"\n  ERROR: {e}", file=sys.stderr)
+            return 2
 
     print("=" * 82)
     print(f"  Query   : {args.query!r}")

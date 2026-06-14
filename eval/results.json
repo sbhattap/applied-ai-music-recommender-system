@@ -4,30 +4,30 @@
   "embedder": "BAAI/bge-small-en-v1.5",
   "retrieval": {
     "bm25": {
-      "p@5": 0.6833,
-      "ndcg@10": 0.689,
-      "recall@20": 0.6308,
-      "mrr": 0.7579,
-      "p50_ms": 8.2
+      "p@5": 0.675,
+      "ndcg@10": 0.6854,
+      "recall@20": 0.6268,
+      "mrr": 0.7352,
+      "p50_ms": 5.9
     },
     "dense": {
       "p@5": 0.7,
       "ndcg@10": 0.6913,
       "recall@20": 0.7065,
       "mrr": 0.8399,
-      "p50_ms": 8.2
+      "p50_ms": 5.9
     },
     "hybrid": {
-      "p@5": 0.7583,
-      "ndcg@10": 0.7611,
-      "recall@20": 0.7039,
-      "mrr": 0.8278,
-      "p50_ms": 8.2
+      "p@5": 0.775,
+      "ndcg@10": 0.7623,
+      "recall@20": 0.7071,
+      "mrr": 0.8556,
+      "p50_ms": 5.9
     }
   },
   "end_to_end": {
     "llm_configured": false,
-    "p@5": 0.7583,
+    "p@5": 0.7667,
     "llm_calls_per_query": 0.0,
     "citation_valid_rate": 1.0,
     "llm_explained_rate": 0.0,
@@ -38,8 +38,8 @@
         "p95": 0
       },
       "retrieve": {
-        "p50": 12,
-        "p95": 19
+        "p50": 11,
+        "p95": 14
       },
       "check": {
         "p50": 0,
@@ -50,8 +50,8 @@
         "p95": 0
       },
       "total": {
-        "p50": 13,
-        "p95": 19
+        "p50": 11,
+        "p95": 15
       }
     },
     "per_query": [
@@ -63,7 +63,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 21
+        "total_ms": 10
       },
       {
         "id": "sleep",
@@ -73,7 +73,7 @@
         "n_relevant": 27,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 19
+        "total_ms": 6
       },
       {
         "id": "piano",
@@ -83,17 +83,17 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 16
+        "total_ms": 6
       },
       {
         "id": "workout",
         "query": "high energy workout songs to push through a run",
         "tool": "semantic_search",
-        "p@5": 0.4,
+        "p@5": 0.2,
         "n_relevant": 37,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 13
+        "total_ms": 6
       },
       {
         "id": "metal",
@@ -103,17 +103,17 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 12
+        "total_ms": 6
       },
       {
         "id": "party",
         "query": "upbeat dance party tracks",
         "tool": "semantic_search",
-        "p@5": 0.6,
+        "p@5": 0.4,
         "n_relevant": 43,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 13
+        "total_ms": 5
       },
       {
         "id": "sad",
@@ -123,7 +123,7 @@
         "n_relevant": 41,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 15
+        "total_ms": 6
       },
       {
         "id": "kpop",
@@ -133,7 +133,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 10
+        "total_ms": 6
       },
       {
         "id": "latin",
@@ -143,7 +143,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 9
+        "total_ms": 6
       },
       {
         "id": "hiphop",
@@ -153,7 +153,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 13
+        "total_ms": 9
       },
       {
         "id": "country-roadtrip",
@@ -163,7 +163,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 8
+        "total_ms": 12
       },
       {
         "id": "folk-acoustic",
@@ -173,7 +173,7 @@
         "n_relevant": 5,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 19
+        "total_ms": 13
       },
       {
         "id": "jazz-evening",
@@ -193,17 +193,17 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 11
+        "total_ms": 14
       },
       {
         "id": "funk-groove",
         "query": "funky groove to dance to",
         "tool": "semantic_search",
-        "p@5": 0.4,
+        "p@5": 0.8,
         "n_relevant": 8,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 12
+        "total_ms": 11
       },
       {
         "id": "reggae",
@@ -213,17 +213,17 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 13
+        "total_ms": 11
       },
       {
         "id": "edm",
         "query": "electronic club bangers",
         "tool": "semantic_search",
-        "p@5": 0.2,
+        "p@5": 0.0,
         "n_relevant": 14,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 11
+        "total_ms": 15
       },
       {
         "id": "rock-anthem",
@@ -243,7 +243,7 @@
         "n_relevant": 10,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 14
+        "total_ms": 11
       },
       {
         "id": "ambient-focus",
@@ -253,7 +253,7 @@
         "n_relevant": 28,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 12
+        "total_ms": 15
       },
       {
         "id": "rnb-romantic",
@@ -263,13 +263,13 @@
         "n_relevant": 9,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 14
+        "total_ms": 11
       },
       {
         "id": "feel-good",
         "query": "feel good songs that make me smile",
         "tool": "semantic_search",
-        "p@5": 0.2,
+        "p@5": 0.4,
         "n_relevant": 50,
         "confidence": 0.6,
         "llm_calls": 0,
@@ -279,11 +279,11 @@
         "id": "introspective",
         "query": "introspective late night indie",
         "tool": "semantic_search",
-        "p@5": 0.8,
+        "p@5": 1.0,
         "n_relevant": 21,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 12
+        "total_ms": 15
       },
       {
         "id": "intense-latin",
@@ -293,7 +293,7 @@
         "n_relevant": 9,
         "confidence": 0.6,
         "llm_calls": 0,
-        "total_ms": 14
+        "total_ms": 11
       }
     ]
   }

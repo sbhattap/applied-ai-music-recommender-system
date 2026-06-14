@@ -58,7 +58,7 @@ def grounded_claims(
         detail = s["detail"][:1].upper() + s["detail"][1:]
         claims.append({"text": f"{detail}.", "evidence_ids": [f"sig:{s['name']}"]})
 
-    context = next((d for d in docs if d["kind"] in ("hist", "tags", "artist")), None)
+    context = next((d for d in docs if d["kind"] in ("hist", "similar", "tags", "artist")), None)
     if context:
         claims.append({"text": _first_sentence(context["text"]), "evidence_ids": [context["doc_id"]]})
 

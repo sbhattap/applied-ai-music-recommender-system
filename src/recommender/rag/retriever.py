@@ -13,13 +13,14 @@ import numpy as np
 
 from .. import config
 from .bm25 import BM25
-from .documents import Document, build_documents
+from .documents import Document, build_documents, keyword_text
 from .embedder import get_embedder, get_vector_cache
 
 
 RRF_K = 60
 CARD_WEIGHT = 0.7       # dense score = 0.7 * card similarity + 0.3 * best context doc
-EVIDENCE_PER_SONG = 3
+EVIDENCE_PER_SONG = 4
+PERSONAL_KINDS = ("hist", "similar")
 
 
 @dataclass
@@ -70,8 +71,9 @@ class Retriever:
         # BM25 over a per-song text: card + short track-level evidence (not long bios,
         # which would let an artist's biography outvote the track itself).
         per_song = []
-        for sid in self.song_ids:
-            parts = [docs[self._card_idx[sid]].text]
+        for song in self.songs:
+            sid = song["id"]
+            parts = [keyword_text(song)]
             parts += [docs[i].text for i in self._context_idx[sid] if docs[i].kind in ("tags", "hist")]
             per_song.append(" ".join(parts))
         self._bm25 = BM25(per_song)
@@ -86,14 +88,23 @@ class Retriever:
         *,
         top_n: Optional[int] = None,
         taste_vector: Optional[Sequence[float]] = None,
+        taste_blend: float = 0.0,
     ) -> List[SongHit]:
-        """Rank ``candidates`` (default: all songs) for ``query``."""
+        """Rank ``candidates`` (default: all songs) for ``query``.
+
+        ``taste_blend`` > 0 pulls the dense query vector toward the listener's taste
+        (personalized candidate generation); 0 keeps retrieval query-only.
+        """
         ids = [s["id"] for s in candidates] if candidates is not None else self.song_ids
         ids = [i for i in ids if i in self._pos]
         if not ids:
             return []
 
         q = get_embedder().embed_query(query)
+        if taste_vector is not None and taste_blend > 0:
+            t = np.asarray(taste_vector, dtype=np.float32)
+            q = q + taste_blend * t / (np.linalg.norm(t) or 1.0)
+            q = q / (np.linalg.norm(q) or 1.0)
         doc_sims = self._doc_vecs @ q
 
         dense = np.empty(len(ids), dtype=np.float32)
@@ -103,10 +114,12 @@ class Retriever:
             ctx = self._context_idx[sid]
             best_ctx = max((doc_sims[i] for i in ctx), default=doc_sims[card])
             dense[j] = CARD_WEIGHT * doc_sims[card] + (1 - CARD_WEIGHT) * best_ctx
-            ranked = sorted([card] + ctx, key=lambda i: -doc_sims[i])[:EVIDENCE_PER_SONG]
-            if card not in ranked:          # the card is always citable
-                ranked = [card] + ranked[:-1]
-            evidence.append([self._evidence(i, float(doc_sims[i])) for i in ranked])
+            # The card and the listener's own history are always citable; the rest of
+            # the slots go to the context docs closest to the query.
+            personal = [i for i in ctx if self.docs[i].kind in PERSONAL_KINDS][:2]
+            others = sorted((i for i in ctx if i not in personal), key=lambda i: -doc_sims[i])
+            chosen = ([card] + personal + others)[:EVIDENCE_PER_SONG]
+            evidence.append([self._evidence(i, float(doc_sims[i])) for i in chosen])
 
         all_bm25 = self._bm25.scores(query)
         bm25 = np.array([all_bm25[self._pos[sid]] for sid in ids], dtype=np.float32)

@@ -11,7 +11,7 @@ import numpy as np
 
 _STOPWORDS = frozenset("""
 a an and are as at be but by for from i in into is it its me my no of on or so some
-something songs song music track tracks that the this to want with like play give
+something songs song music track tracks that the this to up want with like play give get
 """.split())
 
 # Collapse spelling variants so "lo-fi" matches "lofi" etc.

@@ -7,7 +7,7 @@ from ..core.rerank import rerank
 from ..rag import citations
 from ..rag.documents import Document
 from ..rag.retriever import SongHit, get_retriever
-from ..tools import dispatch
+from ..tools import dispatch, structured_filter
 from ..trace.recorder import TraceRecorder
 from . import client, explainer
 from .types import (
@@ -306,6 +306,36 @@ def _ground(
     return {h.song_id: h for h in hits}
 
 
+PERSONAL_CANDIDATES = 6
+TASTE_BLEND = 0.6
+
+
+def _personal_candidates(
+    query: str,
+    plan: Plan,
+    songs: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+    profile: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Extra candidates retrieved with the query pulled toward the listener's taste.
+
+    Query-only retrieval never surfaces songs that fit the *listener* but not the
+    query wording. Structured constraints still hold: for hybrid the pool is the
+    filtered set; structured_filter results are left alone.
+    """
+    taste = profile.get("taste_vector")
+    if taste is None or plan.chosen_tool == "structured_filter":
+        return []
+    pool = structured_filter.run(plan, songs) if plan.chosen_tool == "hybrid" else songs
+    have = {s["id"] for s in candidates}
+    hits = get_retriever(songs, _history_docs(profile)).search(
+        plan.semantic_query or query, pool, top_n=PERSONAL_CANDIDATES + len(have),
+        taste_vector=taste, taste_blend=TASTE_BLEND,
+    )
+    by_id = {s["id"]: s for s in pool}
+    return [by_id[h.song_id] for h in hits if h.song_id not in have][:PERSONAL_CANDIDATES]
+
+
 def _history_docs(profile: Dict[str, Any]) -> List[Document]:
     return [Document(**d) for d in profile.get("history_docs") or []]
 
@@ -324,6 +354,10 @@ def _execute_pass(
     trace.record("plan", iteration=iteration, plan=plan.model_dump())
     with trace.stage("retrieve"):
         candidates = dispatch.call(plan.chosen_tool, plan, songs)
+        personal = _personal_candidates(query, plan, songs, candidates, profile)
+        if personal:
+            trace.record("personalize", iteration=iteration, added_ids=[s["id"] for s in personal])
+        candidates = candidates + personal
         hits = _ground(query, plan, songs, candidates, profile)
     trace.record(
         "act",

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import copy
 import html
+import json
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -19,6 +21,9 @@ from src.recommender.core.rerank import SIGNAL_LABELS
 from src.recommender.llm import agent
 from src.recommender.main import PROFILES
 from src.recommender.rag import get_retriever
+from src.recommender import spotify
+from src.recommender.spotify import auth as spotify_auth
+from src.recommender.spotify.taste import summary_lines
 
 
 st.set_page_config(
@@ -309,16 +314,118 @@ def _warm_retriever(csv_path: str) -> bool:
     return True
 
 
+# Profiles are passed as JSON so the cache key covers a Spotify profile's contents.
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
-def _run_ranked(query: str, profile_key: str, k: int, songs_path: str) -> agent.AgentResult:
+def _run_ranked(query: str, profile_json: str, k: int, songs_path: str,
+                skip_recent: bool) -> agent.AgentResult:
     songs = _load_catalog(songs_path)
-    return agent.run(query, PROFILES[profile_key], songs, k=k, use_llm_explainer=False)
+    profile = json.loads(profile_json)
+    if skip_recent and profile.get("recently_played"):
+        recent = set(profile["recently_played"])
+        songs = [s for s in songs if s["id"] not in recent]
+    return agent.run(query, profile, songs, k=k, use_llm_explainer=False)
 
 
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
-def _run_explained(query: str, profile_key: str, k: int, songs_path: str) -> agent.AgentResult:
-    result = copy.deepcopy(_run_ranked(query, profile_key, k, songs_path))
+def _run_explained(query: str, profile_json: str, k: int, songs_path: str,
+                   skip_recent: bool) -> agent.AgentResult:
+    result = copy.deepcopy(_run_ranked(query, profile_json, k, songs_path, skip_recent))
     return agent.explain_result(result)
+
+
+# ── Spotify ──────────────────────────────────────────────────────────────────
+
+@st.cache_resource
+def _pending_logins() -> Dict[str, str]:
+    """state -> PKCE verifier. Server-wide, because the OAuth redirect opens a new
+    browser session that can't see the old session_state."""
+    return {}
+
+
+@st.cache_data(show_spinner="Reading your Spotify history...", ttl=1800)
+def _spotify_profile(access_token: str, songs_path: str) -> Dict[str, Any]:
+    store = spotify.TokenStore()
+    tokens = store.load()
+    client = spotify.SpotifyClient(
+        tokens if tokens and tokens.access_token == access_token
+        else spotify.Tokens(access_token, "", 0),
+        on_refresh=lambda t: _refresh_and_save(store, t),
+    )
+    history = client.fetch_history()
+    return spotify.build_profile(history, _load_catalog(songs_path))
+
+
+def _refresh_and_save(store, tokens):
+    fresh = spotify_auth.refresh(tokens)
+    store.save(fresh)
+    return fresh
+
+
+def _handle_spotify_callback() -> None:
+    params = st.query_params
+    if "code" not in params and "error" not in params:
+        return
+    if "error" in params:
+        st.error(f"Spotify login was cancelled: {params['error']}")
+        st.query_params.clear()
+        return
+    verifier = _pending_logins().pop(params.get("state", ""), None)
+    if verifier is None:
+        st.error("Spotify login expired. Click Connect Spotify again.")
+        st.query_params.clear()
+        return
+    try:
+        tokens = spotify_auth.exchange_code(params["code"], verifier)
+    except spotify.SpotifyAuthError as exc:
+        st.error(str(exc))
+    else:
+        spotify.TokenStore().save(tokens)
+    st.query_params.clear()
+    st.rerun()
+
+
+def _render_spotify(songs_path: str) -> Dict[str, Any] | None:
+    st.sidebar.subheader("Spotify")
+    if not spotify.is_configured():
+        st.sidebar.caption("Set `SPOTIFY_CLIENT_ID` in `.env` to personalize with your listening history.")
+        return None
+
+    store = spotify.TokenStore()
+    tokens = store.valid()
+    if tokens is None:
+        state = secrets.token_urlsafe(16)
+        verifier = spotify_auth.new_verifier()
+        _pending_logins()[state] = verifier
+        url = spotify_auth.authorize_url(state, verifier)
+        st.sidebar.markdown(
+            f'<a href="{html.escape(url)}" target="_self">'
+            f'<button style="width:100%;padding:0.5rem;border-radius:0.5rem;cursor:pointer;">'
+            f"Connect Spotify</button></a>",
+            unsafe_allow_html=True,
+        )
+        return None
+
+    try:
+        profile = _spotify_profile(tokens.access_token, songs_path)
+    except (spotify.SpotifyAPIError, ValueError) as exc:
+        st.sidebar.error(str(exc))
+        return None
+    for line in summary_lines(profile):
+        st.sidebar.caption(line)
+    with st.sidebar.expander("Your taste profile"):
+        summary = profile["history_summary"]
+        st.write(f"Derived: genre **{profile['genre']}**, mood **{profile['mood']}**, "
+                 f"energy {profile['energy']}, valence {profile['target_valence']}")
+        st.write("Top tracks:")
+        for t in summary["top_tracks"][:5]:
+            st.caption(t)
+        if summary["genre_mix"]:
+            st.bar_chart(pd.Series(summary["genre_mix"], name="share"), horizontal=True, height=180)
+    if st.sidebar.button("Disconnect Spotify"):
+        store.clear()
+        _spotify_profile.clear()
+        st.rerun()
+    return profile
 
 
 def _render_header() -> None:
@@ -337,8 +444,10 @@ def _render_header() -> None:
     )
 
 
-def _profile_label(profile_key: str) -> str:
-    profile = PROFILES[profile_key]
+def _profile_label(profile_key: str, profiles: Dict[str, Dict[str, Any]]) -> str:
+    profile = profiles[profile_key]
+    if profile_key == "spotify":
+        return profile["name"]
     return f"{profile['name']} ({profile['genre']}, {profile['mood']})"
 
 
@@ -606,12 +715,21 @@ def _render_trace(result: agent.AgentResult) -> None:
 
 def _render_sidebar() -> Dict[str, Any]:
     st.sidebar.header("Run Settings")
+    st.session_state.setdefault("songs_path", str(config.SONGS_CSV))
+    songs_path = st.session_state["songs_path"]
+    spotify_profile = _render_spotify(songs_path)
+    profiles = dict(PROFILES)
+    if spotify_profile:
+        profiles = {"spotify": spotify_profile, **profiles}
     profile_key = st.sidebar.selectbox(
         "Profile",
-        options=list(PROFILES.keys()),
-        format_func=_profile_label,
-        index=list(PROFILES.keys()).index("chill_lofi"),
+        options=list(profiles.keys()),
+        format_func=lambda key: _profile_label(key, profiles),
+        index=0 if spotify_profile else list(profiles.keys()).index("chill_lofi"),
     )
+    skip_recent = False
+    if profile_key == "spotify":
+        skip_recent = st.sidebar.checkbox("Skip songs I played recently", value=False)
     query = st.sidebar.text_area(
         "Query",
         value="chill study music, no vocals",
@@ -619,17 +737,19 @@ def _render_sidebar() -> Dict[str, Any]:
     )
     k = st.sidebar.slider("Recommendations", min_value=1, max_value=10, value=5)
     use_llm_explainer = st.sidebar.checkbox("Use LLM explainer", value=True)
-    songs_path = st.sidebar.text_input("Songs CSV", value=str(config.SONGS_CSV))
+    songs_path = st.sidebar.text_input("Songs CSV", key="songs_path")
     run_clicked = st.sidebar.button("Generate Recommendations", width="stretch", type="primary")
 
     st.sidebar.markdown("---")
-    profile = PROFILES[profile_key]
+    profile = profiles[profile_key]
     st.sidebar.caption(
         f"Profile: {profile['name']} | genre={profile['genre']} | mood={profile['mood']} | "
         f"energy={profile['energy']}"
     )
     return {
         "profile_key": profile_key,
+        "profile_json": json.dumps(profile, sort_keys=True),
+        "skip_recent": skip_recent,
         "query": query,
         "k": k,
         "use_llm_explainer": use_llm_explainer,
@@ -640,6 +760,7 @@ def _render_sidebar() -> Dict[str, Any]:
 
 def main() -> None:
     _inject_styles()
+    _handle_spotify_callback()
     _render_header()
     controls = _render_sidebar()
 
@@ -662,7 +783,8 @@ def main() -> None:
         st.error(f"Could not load the song catalog: {exc}")
         return
 
-    args = (controls["query"], controls["profile_key"], controls["k"], controls["songs_path"])
+    args = (controls["query"], controls["profile_json"], controls["k"], controls["songs_path"],
+            controls["skip_recent"])
     with st.spinner("Planning, retrieving, and ranking songs..."):
         try:
             result = _run_ranked(*args)

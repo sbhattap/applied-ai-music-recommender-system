@@ -9,6 +9,7 @@ provenance, and the ``song_ids`` it supports. Kinds:
   artist:{slug}  Wikipedia summary, linked to every song the artist is credited on
   genre:{slug}   Wikipedia summary, linked to every song in that genre
   hist:{id}      the listener's own play history for a track (added per user)
+  similar:{id}   which of the listener's tracks a catalog song is closest to
 """
 
 import json
@@ -28,7 +29,7 @@ MAX_CONTEXT_CHARS = 600
 @dataclass
 class Document:
     doc_id: str
-    kind: str                # song | tags | artist | genre | hist
+    kind: str                # song | tags | artist | genre | hist | similar
     source: str              # catalog | lastfm | wikipedia | spotify
     title: str
     text: str
@@ -93,6 +94,13 @@ def song_card(song: Dict[str, Any]) -> Document:
         doc_id=f"song:{song['id']}", kind="song", source="catalog",
         title=song["title"], text=text, song_ids=[song["id"]],
     )
+
+
+def keyword_text(song: Dict[str, Any]) -> str:
+    """BM25 text for a song: everything on the card except the title. Vibe queries
+    ("something to get pumped up") otherwise match title words ("Pumped Up Kicks")."""
+    tags = " ".join(t for t in song.get("mood_tags", "").split("|") if t)
+    return f"{song['artist']}. {song['genre']} {song['mood']} {tags}. " + "; ".join(describe(song))
 
 
 def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
