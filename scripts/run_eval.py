@@ -164,7 +164,7 @@ def judge(result) -> List[bool]:
         return []
     out = client.call_messages_parsed(
         system=JUDGE_SYSTEM, user="\n\n".join(lines), label="judge", schema=JudgeOut,
-        max_tokens=2048, effort="low", temperature=0.0, model=config.FAST_MODEL,
+        max_tokens=8000, effort="low", model=config.FAST_MODEL,
     )
     return [v.supported for v in out.verdicts]
 

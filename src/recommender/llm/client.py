@@ -1,7 +1,7 @@
-"""Thin wrapper around the Google Gemini SDK with logging + prompt loading.
+"""Thin wrapper around the Anthropic SDK with logging + prompt loading.
 
 All LLM calls in the agent go through ``call_messages`` or ``call_messages_parsed``
-so timeouts, retries, and structured logs are uniform.
+so effort, refusal handling, fallbacks and structured logs are uniform.
 """
 
 import json
@@ -30,54 +30,41 @@ T = TypeVar("T", bound=BaseModel)
 
 _logger = logging.getLogger("recommender.llm")
 _client: Optional[Any] = None
-_genai_types: Optional[Any] = None
+
+# Server-side refusal fallback (re-runs a declined request on another model inside the
+# same call). Only these models accept the "default" form on the Claude API.
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
+EFFORT_LEVELS = {"low", "medium", "high", "xhigh", "max"}
 
 
-def _load_genai() -> tuple[Any, Any]:
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError as exc:
-        raise RuntimeError(
-            "google-genai is not installed. Install project dependencies before using LLM features."
-        ) from exc
-    return genai, types
+class LLMRefusalError(RuntimeError):
+    """The model (and any fallback) declined. Callers treat it like any LLM failure."""
 
 
 def get_client() -> Any:
-    """Lazy-init shared Gemini client. Reads GEMINI_API_KEY from env."""
-    global _client, _genai_types
+    """Lazy-init shared Anthropic client.
+
+    Credentials resolve the SDK's usual way: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN,
+    or an ``ant auth login`` profile.
+    """
+    global _client
     if _client is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        try:
+            import anthropic
+        except ImportError as exc:
             raise RuntimeError(
-                "GEMINI_API_KEY is not set. Copy .env.example to .env and fill it in, "
-                "or export it in your shell."
-            )
-        genai, types = _load_genai()
-        _genai_types = types
-        _client = genai.Client(api_key=api_key)
+                "anthropic is not installed. Install project dependencies before using LLM features."
+            ) from exc
+        _client = anthropic.Anthropic(timeout=config.REQUEST_TIMEOUT_SECONDS, max_retries=2)
     return _client
 
 
-def _get_genai_types() -> Any:
-    global _genai_types
-    if _genai_types is None:
-        _, _genai_types = _load_genai()
-    return _genai_types
-
-
-def _build_contents(system: str, user: str) -> str:
-    return f"{system}\n\n{user}" if system else user
-
-
-def _stop_reason(response: Any) -> str:
-    if not getattr(response, "candidates", None):
-        return "unknown"
-    finish_reason = getattr(response.candidates[0], "finish_reason", None)
-    if finish_reason is None:
-        return "unknown"
-    return getattr(finish_reason, "name", str(finish_reason))
+def is_configured() -> bool:
+    """True when Claude credentials are available. Lets callers pick the offline path up front."""
+    if any(os.environ.get(k) for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE")):
+        return True
+    return (Path.home() / ".config" / "anthropic").is_dir()
 
 
 @lru_cache(maxsize=None)
@@ -101,30 +88,14 @@ def _log_call(record: Dict[str, Any]) -> None:
         _logger.warning("could not write LLM call log: %s", e)
 
 
-_BUDGET_FOR_EFFORT = {"minimal": 0, "low": 1024, "medium": 4096, "high": 8192}
-
-
-def _thinking_config(types: Any, model: str, effort: Optional[str]) -> Any:
-    """Map our effort level onto the model's thinking knob.
-
-    Gemini 3 takes ``thinking_level``; Gemini 2.5 takes a token ``thinking_budget``.
-    Leaving it unset lets the model think as long as it likes, which is the main
-    source of latency, so every call passes an explicit level.
-    """
-    effort = effort or config.EFFORT
-    if model.startswith("gemini-3"):
-        return types.ThinkingConfig(thinking_level=effort)
-    return types.ThinkingConfig(thinking_budget=_BUDGET_FOR_EFFORT.get(effort, 1024))
-
-
 def _usage(response: Any) -> Dict[str, Any]:
-    meta = getattr(response, "usage_metadata", None)
-    if meta is None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
         return {}
     return {
-        "prompt_tokens": getattr(meta, "prompt_token_count", None),
-        "output_tokens": getattr(meta, "candidates_token_count", None),
-        "thinking_tokens": getattr(meta, "thoughts_token_count", None),
+        "input_tokens": getattr(usage, "input_tokens", None),
+        "output_tokens": getattr(usage, "output_tokens", None),
+        "cache_read_tokens": getattr(usage, "cache_read_input_tokens", None),
     }
 
 
@@ -135,34 +106,34 @@ def _generate(
     label: str,
     max_tokens: int,
     effort: Optional[str],
-    temperature: float,
     model: Optional[str],
     schema: Optional[Type[BaseModel]] = None,
-) -> str:
+) -> Any:
+    """One Messages API request. Returns the parsed model when ``schema`` is given,
+    otherwise the response text."""
     client = get_client()
-    types = _get_genai_types()
     model = model or config.MODEL
+    effort = effort if effort in EFFORT_LEVELS else "low"
 
-    extra: Dict[str, Any] = {}
-    if schema is not None:
-        extra = {
-            "response_mime_type": "application/json",
-            "response_json_schema": schema.model_json_schema(),
-        }
-    generation_config = types.GenerateContentConfig(
-        max_output_tokens=max_tokens,
-        temperature=temperature,
-        thinking_config=_thinking_config(types, model, effort),
-        **extra,
-    )
+    # Thinking is left at the model default (adaptive on current models); effort is
+    # the latency/cost knob. Sampling params are not sent (removed on current models).
+    kwargs: Dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+        "output_config": {"effort": effort},
+    }
+    if model in FALLBACK_MODELS:
+        kwargs["betas"] = [FALLBACK_BETA]
+        kwargs["fallbacks"] = "default"
 
     started = time.monotonic()
     try:
-        response = client.models.generate_content(
-            model=model,
-            contents=_build_contents(system, user),
-            config=generation_config,
-        )
+        if schema is not None:
+            response = client.beta.messages.parse(output_format=schema, **kwargs)
+        else:
+            response = client.beta.messages.create(**kwargs)
     except Exception as e:
         _log_call({"label": label, "model": model, "error": str(e), "status": "error"})
         raise
@@ -171,12 +142,26 @@ def _generate(
     _log_call({
         "label": label,
         "model": model,
+        "served_by": getattr(response, "model", model),
         "effort": effort,
         "elapsed_ms": elapsed_ms,
-        "stop_reason": _stop_reason(response),
+        "stop_reason": response.stop_reason,
         **_usage(response),
     })
-    return response.text.strip() if response.text else ""
+
+    if response.stop_reason == "refusal":
+        details = getattr(response, "stop_details", None)
+        category = getattr(details, "category", None) if details else None
+        raise LLMRefusalError(f"{label}: model declined (category={category})")
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError(f"{label}: hit max_tokens={max_tokens} before finishing")
+
+    if schema is not None:
+        parsed = response.parsed_output
+        if parsed is None:
+            raise RuntimeError(f"{label}: no structured output returned")
+        return parsed
+    return "".join(b.text for b in response.content if b.type == "text").strip()
 
 
 def call_messages(
@@ -186,13 +171,12 @@ def call_messages(
     label: str,
     max_tokens: int,
     effort: Optional[str] = None,
-    temperature: float = 1.0,
     model: Optional[str] = None,
 ) -> str:
-    """Plain text response. Returns text from Gemini API."""
+    """Plain text response."""
     return _generate(
         system=system, user=user, label=label, max_tokens=max_tokens,
-        effort=effort, temperature=temperature, model=model,
+        effort=effort, model=model,
     )
 
 
@@ -204,17 +188,10 @@ def call_messages_parsed(
     schema: Type[T],
     max_tokens: int,
     effort: Optional[str] = None,
-    temperature: float = 1.0,
     model: Optional[str] = None,
 ) -> T:
     """Structured-output call. Returns a validated Pydantic model."""
-    text = _generate(
+    return _generate(
         system=system, user=user, label=label, max_tokens=max_tokens,
-        effort=effort, temperature=temperature, model=model, schema=schema,
+        effort=effort, model=model, schema=schema,
     )
-    return schema.model_validate(json.loads(text or "{}"))
-
-
-def is_configured() -> bool:
-    """True when an API key is present. Lets callers pick the offline path up front."""
-    return bool(os.environ.get("GEMINI_API_KEY"))

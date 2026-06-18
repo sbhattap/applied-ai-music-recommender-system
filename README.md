@@ -71,7 +71,7 @@ The main trade-off is that the system is more capable on free-text requests, but
 ### Prerequisites
 
 - Python 3.12+
-- A Gemini API key stored as `GEMINI_API_KEY`
+- Optional: a Claude API key (`ANTHROPIC_API_KEY`) or an `ant auth login` profile. Without one the app still runs fully offline (heuristic planner, deterministic checks, grounded template explanations).
 
 ### Installation
 
@@ -92,14 +92,14 @@ pip install -e .
 4. Create a `.env` file in the project root:
 
 ```env
-GEMINI_API_KEY=your_key_here
+ANTHROPIC_API_KEY=your_key_here
 ```
 
-5. Optional configuration:
+5. Optional configuration (see `.env.example` for Spotify and Last.fm keys):
 
 ```env
-RECOMMENDER_MODEL=gemini-3-flash-preview
-RECOMMENDER_EFFORT=medium
+RECOMMENDER_MODEL=claude-opus-5-5
+RECOMMENDER_FAST_MODEL=claude-haiku-5-5
 ```
 
 ### Run The App

@@ -17,26 +17,23 @@ RAG_DATA_DIR = DATA_DIR / "rag"
 RAG_INDEX_DIR = CACHE_DIR / "rag_index"
 
 
-MODEL = os.environ.get("RECOMMENDER_MODEL", "gemini-3-flash-preview")
-# Cheaper/faster model for check + explain; defaults to MODEL so one env var still works.
+MODEL = os.environ.get("RECOMMENDER_MODEL", "claude-opus-5-5")
+# Model for check + explain; defaults to MODEL. Set e.g. claude-haiku-5-5 to trade
+# some quality for lower latency and cost on those steps.
 FAST_MODEL = os.environ.get("RECOMMENDER_FAST_MODEL", MODEL)
-EFFORT = os.environ.get("RECOMMENDER_EFFORT", "medium")
 
-# Per-step thinking effort. "minimal" ~= thinking off; extra thinking is the biggest
-# latency cost on Gemini 3, so only the planner gets any.
+# Per-step effort (low | medium | high | xhigh | max). Effort is the main latency
+# knob: these steps are short, structured tasks, so they all run at "low".
 PLAN_EFFORT = os.environ.get("RECOMMENDER_PLAN_EFFORT", "low")
-CHECK_EFFORT = "minimal"
-EXPLAINER_EFFORT = "minimal"
+CHECK_EFFORT = "low"
+EXPLAINER_EFFORT = "low"
 
-# Low temperature keeps plans/verdicts stable, which also means fewer refine loops.
-PLAN_TEMPERATURE = 0.3
-CHECK_TEMPERATURE = 0.2
-EXPLAINER_TEMPERATURE = 0.7
-
-PLAN_MAX_TOKENS = 4096
-CHECK_MAX_TOKENS = 2048
-EXPLAINER_MAX_TOKENS = 4096   # one batched call covers all k songs
-SEMANTIC_SEARCH_MAX_TOKENS = 2048
+# max_tokens covers thinking + output; generous caps avoid truncation and cost
+# nothing unless used.
+PLAN_MAX_TOKENS = 8000
+CHECK_MAX_TOKENS = 8000
+EXPLAINER_MAX_TOKENS = 16000   # one batched call covers all k songs
+SEMANTIC_SEARCH_MAX_TOKENS = 8000
 
 MAX_REFINES = 1
 RETRY_CAP = 2  # only used when refine-loop stretch is enabled

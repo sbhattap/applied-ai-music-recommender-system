@@ -112,7 +112,6 @@ def plan_query(query: str, profile: Dict[str, Any]) -> Plan:
         schema=Plan,
         max_tokens=config.PLAN_MAX_TOKENS,
         effort=config.PLAN_EFFORT,
-        temperature=config.PLAN_TEMPERATURE,
     )
 
 
@@ -135,7 +134,6 @@ def check_candidates(
         schema=CheckVerdict,
         max_tokens=config.CHECK_MAX_TOKENS,
         effort=config.CHECK_EFFORT,
-        temperature=config.CHECK_TEMPERATURE,
         model=config.FAST_MODEL,
     )
 

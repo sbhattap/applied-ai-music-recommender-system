@@ -65,7 +65,6 @@ def explain_batch(
         schema=BatchExplanations,
         max_tokens=config.EXPLAINER_MAX_TOKENS,
         effort=config.EXPLAINER_EFFORT,
-        temperature=config.EXPLAINER_TEMPERATURE,
         model=config.FAST_MODEL,
     )
     wanted = {it["song"]["id"] for it in items}

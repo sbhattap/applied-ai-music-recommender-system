@@ -3,8 +3,9 @@
 Usage:
   python -m recommender.main --query "chill study music, no vocals"
 
-Reads GEMINI_API_KEY from the environment (or .env). Exits non-zero with a
-clear message if the key is missing.
+Uses Claude when credentials are available (ANTHROPIC_API_KEY in the environment or
+.env, or an `ant auth login` profile); otherwise runs fully offline with a heuristic
+planner and grounded template explanations.
 """
 
 import argparse
