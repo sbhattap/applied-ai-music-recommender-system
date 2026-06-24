@@ -317,19 +317,19 @@ def _warm_retriever(csv_path: str) -> bool:
 # Profiles are passed as JSON so the cache key covers a Spotify profile's contents.
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
 def _run_ranked(query: str, profile_json: str, k: int, songs_path: str,
-                skip_recent: bool) -> agent.AgentResult:
+                skip_recent: bool, fast: bool) -> agent.AgentResult:
     songs = _load_catalog(songs_path)
     profile = json.loads(profile_json)
     if skip_recent and profile.get("recently_played"):
         recent = set(profile["recently_played"])
         songs = [s for s in songs if s["id"] not in recent]
-    return agent.run(query, profile, songs, k=k, use_llm_explainer=False)
+    return agent.run(query, profile, songs, k=k, use_llm_explainer=False, fast=fast)
 
 
 @st.cache_data(show_spinner=False, ttl=3600, max_entries=128)
 def _run_explained(query: str, profile_json: str, k: int, songs_path: str,
-                   skip_recent: bool) -> agent.AgentResult:
-    result = copy.deepcopy(_run_ranked(query, profile_json, k, songs_path, skip_recent))
+                   skip_recent: bool, fast: bool) -> agent.AgentResult:
+    result = copy.deepcopy(_run_ranked(query, profile_json, k, songs_path, skip_recent, fast))
     return agent.explain_result(result)
 
 
@@ -737,6 +737,11 @@ def _render_sidebar() -> Dict[str, Any]:
     )
     k = st.sidebar.slider("Recommendations", min_value=1, max_value=10, value=5)
     use_llm_explainer = st.sidebar.checkbox("Use LLM explainer", value=True)
+    fast = st.sidebar.toggle(
+        "Recommend fast",
+        value=False,
+        help=f"Check and explain with {config.FAST_MODE_MODEL} (~30% faster, slightly less nuanced explanations).",
+    )
     songs_path = st.sidebar.text_input("Songs CSV", key="songs_path")
     run_clicked = st.sidebar.button("Generate Recommendations", width="stretch", type="primary")
 
@@ -753,6 +758,7 @@ def _render_sidebar() -> Dict[str, Any]:
         "query": query,
         "k": k,
         "use_llm_explainer": use_llm_explainer,
+        "fast": fast,
         "songs_path": songs_path,
         "run_clicked": run_clicked,
     }
@@ -784,7 +790,7 @@ def main() -> None:
         return
 
     args = (controls["query"], controls["profile_json"], controls["k"], controls["songs_path"],
-            controls["skip_recent"])
+            controls["skip_recent"], controls["fast"])
     with st.spinner("Planning, retrieving, and ranking songs..."):
         try:
             result = _run_ranked(*args)

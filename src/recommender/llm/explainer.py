@@ -7,7 +7,7 @@ short claims that each cite evidence ids; ``rag.citations.validate`` then drops 
 claim citing nothing or citing evidence that wasn't offered for that song.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .. import config
 from . import client
@@ -43,6 +43,7 @@ def explain_batch(
     profile_summary: str,
     items: List[Dict[str, Any]],
     verdict: CheckVerdict,
+    model: Optional[str] = None,
 ) -> Dict[int, List[Dict[str, Any]]]:
     """Return ``{song_id: [{"text", "evidence_ids"}, ...]}`` (unvalidated) in one call.
 
@@ -65,7 +66,7 @@ def explain_batch(
         schema=BatchExplanations,
         max_tokens=config.EXPLAINER_MAX_TOKENS,
         effort=config.EXPLAINER_EFFORT,
-        model=config.FAST_MODEL,
+        model=model or config.FAST_MODEL,
     )
     wanted = {it["song"]["id"] for it in items}
     return {

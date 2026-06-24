@@ -358,3 +358,36 @@ def test_genre_cap_relaxed_when_query_targets_a_genre(songs):
     assert agent.genre_cap(plan, mixed, by_id) == 2
     filtered = plan.model_copy(update={"genre_filter": ["rock"]})
     assert agent.genre_cap(filtered, mixed, by_id) is None
+
+
+def test_semantic_plan_with_filters_runs_as_hybrid(monkeypatch, songs, profile):
+    plan = Plan(
+        intent="sad songs", chosen_tool="semantic_search",
+        expected_count_min=1, expected_count_max=5,
+        semantic_query="sad songs", mood_filter=["chill"],
+    )
+    _stub_llm(monkeypatch, plan=plan, verdict=CheckVerdict(confidence=0.9, note="ok"))
+    result = agent.run("sad songs", profile, songs)
+    assert result.plan.chosen_tool == "hybrid"
+    assert all(s["mood"] == "chill" or "chill" in s["mood_tags"] for s in result.candidates)
+    assert any(ev["kind"] == "tool_override" for ev in result.trace_events)
+
+
+def test_fast_mode_uses_fast_model_for_check_and_explain(monkeypatch, songs, profile):
+    plan = Plan(intent="lofi", chosen_tool="semantic_search", expected_count_min=1,
+                expected_count_max=5, semantic_query="lofi")
+    models = {}
+    calls = _stub_llm(monkeypatch, plan=plan, verdict=CheckVerdict(confidence=0.9, note="ok"))
+    real = agent.client.call_messages_parsed
+
+    def spy(**kwargs):
+        models[kwargs["label"]] = kwargs.get("model")
+        return real(**kwargs)
+
+    monkeypatch.setattr("src.recommender.llm.agent.client.call_messages_parsed", spy)
+    result = agent.run("lofi", profile, songs, fast=True)
+    assert result.fast
+    from src.recommender import config
+    assert models["check"] == config.FAST_MODE_MODEL
+    assert models["explainer"] == config.FAST_MODE_MODEL
+    assert models["plan"] is None  # planner keeps the main model

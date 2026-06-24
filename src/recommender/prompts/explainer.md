@@ -26,11 +26,10 @@ For each song, write **2–3 claims**. A claim is one short sentence (under 25 w
 
 ## Hedging
 
-If `check.confidence < 0.6`, or the flags contain `intent_mismatch` or `constraint_violated`:
-- Acknowledge the gap in the first claim, e.g. "Closest match available — energy fits, but the mood is softer than you asked for."
-- Avoid "perfect" or "exactly".
+Decide once, from the check verdict, for the whole batch:
 
-Otherwise, write confidently without hedging.
+- **Hedge** only when `check.confidence < 0.6`, or the flags contain `intent_mismatch` or `constraint_violated`. Then acknowledge the gap in each song's first claim, e.g. "Closest match available — energy fits, but the mood is softer than you asked for." Avoid "perfect" or "exactly".
+- **Otherwise, do not hedge.** Never write "closest match available" or similar for a healthy verdict, even for a song with weaker signals. If one signal is weaker, state it plainly as a fact ("its tempo is faster than the rest").
 
 ## Output
 

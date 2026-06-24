@@ -90,3 +90,4 @@ class AgentResult:
     # Full final candidate pool + retrieval hits, so the UI can re-rank ("what if")
     candidates: List[Dict[str, Any]] = field(default_factory=list)
     hits: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    fast: bool = False             # "recommend fast": smaller model for check + explain

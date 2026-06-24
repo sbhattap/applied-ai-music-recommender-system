@@ -124,6 +124,8 @@ def main(argv=None):
     parser.add_argument("--k", type=int, default=5, help="Number of recommendations to return")
     parser.add_argument("--no-llm-explainer", action="store_true",
                         help="Skip the LLM explainer; use templated narratives")
+    parser.add_argument("--fast", action="store_true",
+                        help=f"Recommend fast: check + explain with {config.FAST_MODE_MODEL}")
     parser.add_argument("--spotify", action="store_true",
                         help="Use your Spotify listening history (run scripts/spotify_login.py first)")
     parser.add_argument("--songs", default=str(config.SONGS_CSV),
@@ -151,6 +153,7 @@ def main(argv=None):
             args.query, profile, songs,
             k=args.k,
             use_llm_explainer=not args.no_llm_explainer,
+            fast=args.fast,
         )
     except RuntimeError as e:
         print(f"\n  ERROR: {e}", file=sys.stderr)

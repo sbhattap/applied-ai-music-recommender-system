@@ -119,6 +119,8 @@ def check_candidates(
     plan: Plan,
     candidates: List[Dict[str, Any]],
     hits: Optional[Dict[int, SongHit]] = None,
+    *,
+    model: Optional[str] = None,
 ) -> CheckVerdict:
     """Act 3: judge whether the candidates plausibly satisfy the plan."""
     system = client.load_prompt("check")
@@ -134,7 +136,7 @@ def check_candidates(
         schema=CheckVerdict,
         max_tokens=config.CHECK_MAX_TOKENS,
         effort=config.CHECK_EFFORT,
-        model=config.FAST_MODEL,
+        model=model or config.FAST_MODEL,
     )
 
 
@@ -348,7 +350,14 @@ def _execute_pass(
     iteration: int,
     fast_check: bool,
     llm_available: bool,
+    fast: bool = False,
 ) -> tuple[Plan, List[Dict[str, Any]], CheckVerdict, Dict[int, SongHit]]:
+    if plan.chosen_tool == "semantic_search" and _has_hard_constraints(plan):
+        # semantic_search ignores filters, so a plan with both would violate its own
+        # constraints and burn a refine round; that combination is what hybrid does.
+        trace.record("tool_override", iteration=iteration, from_tool="semantic_search", to_tool="hybrid",
+                     reason="plan has hard constraints")
+        plan = plan.model_copy(update={"chosen_tool": "hybrid", "semantic_query": plan.semantic_query or plan.intent})
     trace.record("plan", iteration=iteration, plan=plan.model_dump())
     with trace.stage("retrieve"):
         candidates = dispatch.call(plan.chosen_tool, plan, songs)
@@ -370,7 +379,8 @@ def _execute_pass(
     )
 
     with trace.stage("check"):
-        verdict, source = _check(plan, candidates, hits, fast_check=fast_check, llm_available=llm_available)
+        verdict, source = _check(plan, candidates, hits, fast_check=fast_check,
+                                 llm_available=llm_available, fast=fast)
     trace.record("check", iteration=iteration, source=source, verdict=verdict.model_dump())
     return plan, candidates, verdict, hits
 
@@ -382,6 +392,7 @@ def _check(
     *,
     fast_check: bool,
     llm_available: bool,
+    fast: bool = False,
 ) -> tuple[CheckVerdict, str]:
     """Cheapest verdict that's still honest: synthesized → deterministic → LLM → count-only."""
     if not candidates:
@@ -392,7 +403,7 @@ def _check(
             return verdict, "deterministic"
     if llm_available:
         try:
-            return check_candidates(plan, candidates, hits), "llm"
+            return check_candidates(plan, candidates, hits, model=config.step_model(fast)), "llm"
         except Exception:
             pass
     return _count_only_verdict(plan, candidates), "count_only"
@@ -420,12 +431,15 @@ def run(
     trace: Optional[TraceRecorder] = None,
     max_refines: int = config.MAX_REFINES,
     fast_check: bool = True,
+    fast: bool = False,
 ) -> AgentResult:
     """Run plan -> act -> check -> refine -> rank, then (optionally) explain.
 
     Set ``use_llm_explainer=False`` to get ranked results with templated narratives
     right away, then call ``explain_result`` to fill in LLM narratives; the UI does
     this so cards render before the explainer finishes.
+
+    ``fast=True`` ("recommend fast") runs check + explain on ``config.FAST_MODE_MODEL``.
     """
     if trace is None:
         trace = TraceRecorder(query)
@@ -448,6 +462,7 @@ def run(
             iteration=iteration,
             fast_check=fast_check,
             llm_available=llm_available,
+            fast=fast,
         )
         if iteration >= max_refines or not _should_refine(verdict):
             break
@@ -493,6 +508,7 @@ def run(
         recommendations=recommendations,
         candidates=candidates,
         hits={sid: h.to_dict() for sid, h in hits.items()},
+        fast=fast,
     )
     if use_llm_explainer and llm_available:
         explain_result(result, trace=trace)
@@ -609,6 +625,7 @@ def _explain_into(result: AgentResult, trace: TraceRecorder) -> None:
                 profile_summary=_profile_summary(result.profile),
                 items=items,
                 verdict=result.verdict,
+                model=config.step_model(result.fast),
             )
         except Exception as e:
             trace.record("explainer_fallback", error=str(e))

@@ -21,6 +21,14 @@ MODEL = os.environ.get("RECOMMENDER_MODEL", "claude-opus-5-5")
 # Model for check + explain; defaults to MODEL. Set e.g. claude-haiku-5-5 to trade
 # some quality for lower latency and cost on those steps.
 FAST_MODEL = os.environ.get("RECOMMENDER_FAST_MODEL", MODEL)
+# "Recommend fast" mode (UI toggle / --fast): check + explain on a smaller model.
+# Measured live: ~11 s vs ~15 s per query; planning stays on MODEL.
+FAST_MODE_MODEL = os.environ.get("RECOMMENDER_FAST_MODE_MODEL", "claude-haiku-5-5")
+
+
+def step_model(fast: bool) -> str:
+    """Model for the check and explain steps."""
+    return FAST_MODE_MODEL if fast else FAST_MODEL
 
 # Per-step effort (low | medium | high | xhigh | max). Effort is the main latency
 # knob: these steps are short, structured tasks, so they all run at "low".
