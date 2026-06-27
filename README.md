@@ -95,11 +95,21 @@ pip install -e .
 ANTHROPIC_API_KEY=your_key_here
 ```
 
-5. Optional configuration (see `.env.example` for Spotify and Last.fm keys):
+5. Optional settings (all can go in the same `.env`):
 
 ```env
+# Model overrides (defaults: claude-opus-5-5 everywhere; fast mode uses claude-haiku-5-5)
 RECOMMENDER_MODEL=claude-opus-5-5
-RECOMMENDER_FAST_MODEL=claude-haiku-5-5
+RECOMMENDER_FAST_MODE_MODEL=claude-haiku-5-5
+
+# Spotify personalization. Create an app at developer.spotify.com/dashboard
+# (owner needs Premium; max 5 allowlisted users) and register both redirect URIs:
+#   http://127.0.0.1:8501            (Streamlit)
+#   http://127.0.0.1:8888/callback   (scripts/spotify_login.py)
+SPOTIFY_CLIENT_ID=your_client_id
+
+# Last.fm crowd tags for the RAG knowledge store (scripts/build_knowledge.py)
+LASTFM_API_KEY=your_key
 ```
 
 ### Run The App
