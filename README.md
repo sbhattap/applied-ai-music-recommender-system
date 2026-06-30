@@ -105,7 +105,7 @@ RECOMMENDER_FAST_MODE_MODEL=claude-haiku-5-5
 # Spotify personalization. Create an app at developer.spotify.com/dashboard
 # (owner needs Premium; max 5 allowlisted users) and register both redirect URIs:
 #   http://127.0.0.1:8501            (Streamlit)
-#   http://127.0.0.1:8888/callback   (scripts/spotify_login.py)
+#   http://127.0.0.1:8888/callback   (scripts/spotify_login.py; --port N for another)
 SPOTIFY_CLIENT_ID=your_client_id
 
 # Last.fm crowd tags for the RAG knowledge store (scripts/build_knowledge.py)

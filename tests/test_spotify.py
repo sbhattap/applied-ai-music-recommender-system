@@ -8,7 +8,14 @@ import pytest
 
 from src.recommender.llm import agent
 from src.recommender.spotify import SpotifyClient, Tokens, auth, build_profile
+from src.recommender.spotify import labels
 from src.recommender.spotify.taste import aggregate, track_key
+
+
+@pytest.fixture(autouse=True)
+def no_llm_labels(monkeypatch):
+    """build_profile must not call the LLM or touch the real label cache in tests."""
+    monkeypatch.setattr("src.recommender.spotify.taste.label_tracks", lambda tracks: {})
 
 
 def _song(id_, title, artist, genre, mood, energy, **kw):
@@ -95,6 +102,54 @@ def test_build_profile_derives_prefs_and_evidence(history, songs):
     sandman = next(d for d in p["history_docs"] if d["doc_id"] == "hist:1")
     assert "played 2 times" in sandman["text"]
     assert p["history_summary"]["matched_to_catalog"] == 2
+
+
+def test_build_profile_uses_labels_for_unmatched_tracks(history, songs):
+    pop = {"genre": "pop", "mood": "happy", "energy": 0.7, "valence": 0.9, "acousticness": 0.2}
+    seen = []
+
+    def labeler(tracks):
+        seen.extend(t[1] for t in tracks)
+        return {t[0]: pop for t in tracks}
+
+    history["recently_played"] += [_t("Unlisted Riff", "Sleep Token")] * 10
+    p = build_profile(history, songs, labeler=labeler)
+    assert seen == ["Unlisted Riff"]               # only tracks missing from the catalog
+    assert p["genre"] == "pop" and p["mood"] == "happy"
+    assert p["history_summary"]["labelled"] == 1
+
+
+def test_similar_docs_ignore_title_overlap_across_genres(history, songs):
+    """A pop track titled like a classical piece must not yield a "similar to" doc."""
+    pop = {"genre": "pop", "mood": "happy", "energy": 0.7, "valence": 0.9, "acousticness": 0.2}
+    history["recently_played"].append(_t("Clair de Lune Remix", "DJ Pop"))
+    p = build_profile(history, songs, labeler=lambda tracks: {t[0]: pop for t in tracks})
+    similar = [d for d in p["history_docs"] if d["kind"] == "similar"]
+    assert all("Clair de Lune" not in d["text"] or d["song_ids"] != [3] for d in similar)
+    assert all('"' in d["text"] for d in similar)   # history title is quoted
+
+
+def test_label_tracks_caches_and_skips_llm_when_cached(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_call(**kw):
+        calls.append(kw["user"])
+        return labels.TrackLabels(labels=[labels.TrackLabel(
+            i=0, genre="pop", mood="happy", energy=0.7, valence=0.8, acousticness=0.1)])
+
+    monkeypatch.setattr(labels.client, "is_configured", lambda: True)
+    monkeypatch.setattr(labels.client, "call_messages_parsed", fake_call)
+    path = tmp_path / "labels.json"
+    tracks = [(("blue moon", "zara larsson"), "Blue Moon", ["Zara Larsson"], [])]
+    first = labels.label_tracks(tracks, cache_path=path)
+    second = labels.label_tracks(tracks, cache_path=path)
+    assert first == second and first[("blue moon", "zara larsson")]["genre"] == "pop"
+    assert len(calls) == 1 and "Blue Moon — Zara Larsson" in calls[0]
+
+
+def test_label_tracks_offline_returns_cache_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(labels.client, "is_configured", lambda: False)
+    assert labels.label_tracks([(("a", "b"), "A", ["B"], [])], cache_path=tmp_path / "x.json") == {}
 
 
 def test_agent_uses_spotify_profile_signals_and_history_evidence(monkeypatch, history, songs):

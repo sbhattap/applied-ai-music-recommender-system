@@ -4,10 +4,12 @@
    saved tracks) into one play-weight per track.
 2. Match tracks to the catalog by normalized title + artist. Matched songs carry real
    audio features; unmatched tracks are embedded from their text (title, artists,
-   artist genres) with the same embedder as the catalog.
+   artist genres) with the same embedder as the catalog. Unmatched tracks are first
+   labelled with catalog genre/mood/energy by one cached fast-model call (labels.py),
+   since Spotify returns no audio features and few artist genres.
 3. Taste vector = weight-averaged embedding of everything above.
-4. Derived profile: genre/mood/energy/valence/acoustic from matched songs plus the
-   nearest catalog neighbours of unmatched ones, so the 7 profile signals work too.
+4. Derived profile: genre/mood/energy/valence/acoustic from matched songs, labels of
+   unmatched ones, and (offline) nearest catalog neighbours of the rest.
 5. Evidence: ``hist:{id}`` docs for catalog songs the listener actually plays, and
    ``similar:{id}`` docs linking catalog songs to the history track they're closest to.
    Both are citable by the explainer ("because you play X").
@@ -16,7 +18,7 @@
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -24,6 +26,7 @@ from ..core.io import _normalize_text, split_artists
 from ..rag.documents import Document
 from ..rag.embedder import get_vector_cache
 from ..rag.retriever import get_retriever
+from .labels import label_tracks
 
 
 # How much each signal says about taste.
@@ -31,7 +34,7 @@ WEIGHT_RECENT_PLAY = 1.0
 WEIGHT_TOP = {"short_term": 3.0, "medium_term": 2.0, "long_term": 1.5}
 WEIGHT_SAVED = 1.0
 NEIGHBOURS = 3
-SIMILAR_MIN = 0.80          # cosine floor for a "similar to X you play" evidence doc
+SIMILAR_MIN = 0.78          # cosine floor for a "similar to X you play" evidence doc
 
 _SUFFIX = re.compile(r"\s*[\(\[\-–].*?(feat\.?|ft\.?|with|remaster(ed)?|version|edit|mix|live).*$", re.I)
 
@@ -89,9 +92,17 @@ def _catalog_index(songs: Sequence[Dict[str, Any]]) -> Dict[Tuple[str, str], int
     return index
 
 
-def _history_text(t: TrackStats) -> str:
+def _history_text(
+    t: TrackStats, label: Optional[Dict[str, Any]] = None, *, with_title: bool = True,
+) -> str:
     genres = f" Genres: {', '.join(t.genres)}." if t.genres else ""
-    return f"{t.name} by {', '.join(t.artists)}.{genres}"
+    if label:
+        energy = label["energy"]
+        feel = ("low energy, calm" if energy < 0.35 else
+                "moderate energy" if energy < 0.65 else "high energy, intense")
+        genres += f" Genre: {label['genre']}. Mood: {label['mood']}, {feel}."
+    title = f"{t.name} " if with_title else ""
+    return f"{title}by {', '.join(t.artists)}.{genres}"
 
 
 _RANGE_LABEL = {"short_term": "last 4 weeks", "medium_term": "last 6 months", "long_term": "all time"}
@@ -111,6 +122,8 @@ def _hist_text(t: TrackStats) -> str:
 def build_profile(
     history: Dict[str, Any],
     songs: Sequence[Dict[str, Any]],
+    *,
+    labeler: Optional[Callable[..., Dict[Tuple[str, str], Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """Profile dict for ``agent.run``: profile prefs + taste_vector, recently_played,
     history_docs, and a ``history_summary`` for the UI."""
@@ -127,17 +140,25 @@ def build_profile(
     weights = np.array([t.weight for t in stats], dtype=np.float32)
     matched = {i: catalog[k] for i, k in enumerate(keys) if k in catalog}
 
-    vecs = get_vector_cache().get_many([_history_text(t) for t in stats])
+    unmatched = sorted((i for i in range(len(stats)) if i not in matched), key=lambda i: -weights[i])
+    labels = (labeler or label_tracks)(
+        [(keys[i], stats[i].name, stats[i].artists, stats[i].genres) for i in unmatched]
+    )
+    label_of = {i: labels[keys[i]] for i in unmatched if keys[i] in labels}
+
+    vecs = get_vector_cache().get_many([_history_text(t, label_of.get(i)) for i, t in enumerate(stats)])
     for i, sid in matched.items():
         vecs[i] = retriever.song_vector(sid)        # matched: use the catalog card
     taste = (weights[:, None] * vecs).sum(axis=0)
     taste = taste / (np.linalg.norm(taste) or 1.0)
 
-    # Feature profile from matched songs + nearest catalog neighbours of the rest.
+    # Feature profile: matched songs, then labels, then nearest catalog neighbours.
     feature_votes: List[Tuple[Dict[str, Any], float]] = []
     for i, t in enumerate(stats):
         if i in matched:
             feature_votes.append((by_id[matched[i]], t.weight))
+        elif i in label_of:
+            feature_votes.append((label_of[i], t.weight))
         else:
             sims = card_matrix @ vecs[i]
             for j in np.argsort(-sims)[:NEIGHBOURS]:
@@ -162,20 +183,32 @@ def build_profile(
             doc_id=f"hist:{sid}", kind="hist", source="spotify", title=stats[i].name,
             text=_hist_text(stats[i]), song_ids=[sid], url=stats[i].url,
         ))
-    # "Similar to X you play": each catalog song's closest history track.
-    sims = card_matrix @ vecs.T                       # songs x history
+    # "Similar to X you play": each catalog song's closest history track. Compared on
+    # artist + genre/mood text without the title (titles caused word-overlap matches like
+    # "Feeling Good" ~ "Feel Your Rain"), and only within the same genre when known.
+    sound = get_vector_cache().get_many(
+        [_history_text(t, label_of.get(i), with_title=False) for i, t in enumerate(stats)])
+    for i, sid in matched.items():
+        sound[i] = retriever.song_vector(sid)
+    sims = card_matrix @ sound.T                      # songs x history
+    genre_of = {i: by_id[sid]["genre"] for i, sid in matched.items()}
+    genre_of.update({i: lab["genre"] for i, lab in label_of.items()})
     matched_ids = set(matched.values())
     for j, song in enumerate(songs):
         if song["id"] in matched_ids:
             continue
-        i = int(np.argmax(sims[j]))
+        allowed = [i for i in range(len(stats)) if genre_of.get(i, song["genre"]) == song["genre"]]
+        if not allowed:
+            continue
+        i = max(allowed, key=lambda i: sims[j, i])
         if sims[j, i] >= SIMILAR_MIN:
             t = stats[i]
             docs.append(Document(
                 doc_id=f"similar:{song['id']}", kind="similar", source="spotify",
                 title=f"Similar to {t.name}",
-                text=f"Close to {t.name} by {', '.join(t.artists)}, which you listen to "
-                     f"(similarity {sims[j, i]:.2f}).",
+                # Quote the title: the explainer misread "Close to X" as a track name.
+                text=f"Sounds similar to \"{t.name}\" by {', '.join(t.artists)}, which you "
+                     f"listen to (similarity {sims[j, i]:.2f}).",
                 song_ids=[song["id"]], url=t.url,
             ))
 
@@ -200,6 +233,7 @@ def build_profile(
             "user": user,
             "tracks": len(stats),
             "matched_to_catalog": len(matched),
+            "labelled": len(label_of),
             "top_tracks": [f"{t.name} — {', '.join(t.artists)}" for t in top_tracks],
             "top_artist_genres": [g for g, _ in top_genres],
             "genre_mix": {g: round(w / total, 3) for g, w in genre_w.most_common(6)},
