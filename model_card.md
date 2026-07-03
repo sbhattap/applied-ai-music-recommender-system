@@ -6,9 +6,10 @@
 
 This project is a hybrid system rather than a single standalone model. It combines:
 
-- a deterministic content-based music recommender
-- an LLM-driven planning and checking layer
-- an LLM-based explanation layer
+- a deterministic content-based scorer (the original 7 profile signals)
+- a hybrid retriever (BM25 + local `BAAI/bge-small-en-v1.5` embeddings) over a small knowledge store
+- an LLM agent (Claude, via the `anthropic` SDK) that plans, checks, and explains
+- optional Spotify personalization from the listener's own history
 
 ## 2. Intended Use
 
@@ -30,11 +31,11 @@ It is not intended for:
 
 ## 3. System Overview
 
-The system has two major layers.
+The system has four layers.
 
-### Deterministic ranking layer
+### Deterministic scoring layer
 
-The original recommender takes a structured listener profile and scores songs using seven signals:
+The original recommender scores songs with seven profile signals:
 
 - genre match
 - mood match
@@ -44,18 +45,23 @@ The original recommender takes a structured listener profile and scores songs us
 - valence proximity
 - popularity fit
 
-After scoring, it applies a diversity cap of at most two songs per genre and returns the top `k` songs.
+### Retrieval layer (RAG)
+
+- **Documents:** `song:` cards (attributes rendered as words), plus `artist:` and `genre:` summaries from Wikipedia, plus optional Last.fm `tags:`. A Spotify listener adds `hist:` and `similar:` documents.
+- **Search:** BM25 and dense search, fused with reciprocal rank fusion. Every hit records its BM25 rank, its dense rank, and the query terms it matched, along with the evidence documents that support it.
 
 ### LLM orchestration layer
 
-The extended system accepts a free-text request and runs a four-step loop:
+1. `PLAN`: interpret the request, extract hard filters, choose a retrieval tool, and estimate the expected result count
+2. `ACT`: run `structured_filter`, `semantic_search` (the hybrid retriever), or `hybrid` (filter, then retrieve)
+3. `CHECK`: assign a confidence score and flags. Clear-cut cases are decided in code without an LLM call.
+4. `REFINE`: if the check is weak, relax filters or switch tools (at most once)
+5. `RANK`: the additive reranker, `score = 0.5·query_match + 0.15·taste_match + 0.05·novelty + Σ wᵢ·profile_signalᵢ`
+6. `EXPLAIN`: one batched call writes short claims per song. Each claim must cite evidence ids, and a deterministic validator drops claims that don't.
 
-1. `PLAN`: interpret the request, extract constraints, choose a retrieval tool, and estimate expected result count
-2. `ACT`: run `structured_filter`, `semantic_search`, or `hybrid`
-3. `CHECK`: assign a confidence score and flags to the candidate set
-4. `RESPOND`: re-rank with the deterministic scorer and generate explanation text
+### Personalization layer (Spotify, optional)
 
-If a candidate set looks weak, the system can refine the plan and retry with broader constraints or a different retrieval strategy.
+Listening history is matched to the catalog, and unmatched tracks are labelled with catalog-style genre, mood, and energy by one cached LLM call. The result is a derived profile, a taste vector (which adds a `taste_match` signal), a recently-played set (no novelty bonus for those songs), and citable `hist:` / `similar:` evidence.
 
 ## 4. Inputs And Outputs
 
@@ -79,12 +85,17 @@ The system uses two kinds of input.
 | `target_valence` | float 0-1 | preferred emotional tone |
 | `prefer_popular` | bool | mainstream vs. niche preference |
 
+**Spotify profile (optional)**
+
+When the listener logs in, the profile above is derived from their history instead of picked from a preset. It also carries `taste_vector`, `recently_played`, and `history_docs`.
+
 ### Outputs
 
 - ranked recommendations
-- deterministic score per recommendation
-- rule-based explanation breakdown
-- LLM-generated or templated narrative per recommendation
+- additive score per recommendation, broken down by signal
+- retrieved evidence per recommendation, with source and link
+- cited claims (LLM-written, or template claims built from the same evidence when offline)
+- claims dropped by the citation validator
 - agent trace events
 - check confidence and flags
 
@@ -125,11 +136,15 @@ Each song record includes:
 | `explicit` | No | No |
 | `release_decade` | No | No |
 
+Knowledge store (`data/rag/`): 187 Wikipedia artist summaries and 18 genre summaries. Last.fm tags are added only when `LASTFM_API_KEY` is set.
+
 This is a small catalog, which makes the system easier to inspect but also limits coverage for niche combinations of mood, genre, and constraints.
 
 ## 6. How Ranking Works
 
-The deterministic ranker uses these default weights:
+The final score is additive: `0.5·query_match + 0.15·taste_match + 0.05·novelty` plus the profile signals below. A profile signal only counts when the listener stated that preference, and the UI's per-signal bars sum exactly to the score.
+
+The profile signals use these default weights:
 
 | Signal | Weight |
 |---|---|
@@ -159,13 +174,13 @@ These presets make it easier to compare how different recommendation philosophie
 
 ## 7. Retrieval And Agent Behavior
 
-The LLM layer does not directly score songs. Instead, it controls which candidate songs are passed to the deterministic ranker.
+The LLM does not score songs. It controls which candidates reach the reranker and writes the explanations.
 
 ### Retrieval tools
 
 - `structured_filter`: pure logic filter on genre, mood, BPM, energy, and instrumentalness
-- `semantic_search`: LLM selects matching song ids from the catalog
-- `hybrid`: deterministic narrowing first, then semantic selection inside the narrowed set
+- `semantic_search`: the hybrid retriever over the knowledge store (~12 ms). The legacy backend, where an LLM reads the whole catalog, is kept behind `RECOMMENDER_SEMANTIC_BACKEND=llm` for ablations.
+- `hybrid`: hard filters first, then the hybrid retriever inside the filtered set
 
 ### Check output
 
@@ -181,7 +196,11 @@ Supported flags:
 - `constraint_violated`
 - `intent_mismatch`
 
-These signals are used for observability and for deciding whether the system should refine and retry.
+These signals drive the single refine step and are shown in the UI.
+
+### Explanations
+
+Each claim must cite evidence ids: a score signal (`sig:energy`), a song card, an artist or genre summary, or a listening-history doc. Claims with no ids, or with ids that weren't offered for that song, are dropped and recorded in the trace.
 
 ## 8. Strengths
 
@@ -189,6 +208,8 @@ These signals are used for observability and for deciding whether the system sho
 - The deterministic scorer keeps the final ranking reproducible and testable.
 - The check step makes uncertainty visible instead of silently hiding weak retrieval results.
 - The fallback explainer keeps the system functional even if the LLM explanation call fails.
+- Every explanation claim is tied to a retrieved document or a score signal, and unsupported claims are removed before the user sees them.
+- Hybrid retrieval beats the original LLM catalog search on P@5 at about 1/150th of the latency.
 - The separation between retrieval and ranking makes the architecture easier to debug than a fully end-to-end LLM recommender.
 
 ## 9. Limitations And Biases
@@ -199,40 +220,36 @@ These signals are used for observability and for deciding whether the system sho
 - `tempo_bpm` and `instrumentalness` affect retrieval but not final ranking, so some constraints shape the candidate set more than the final score.
 - `prefer_popular=True` by default can tilt the system toward mainstream music unless changed.
 - LLM planning and semantic retrieval are dependent on prompt quality and API availability.
-- The recommendations are not personalized from listening history, so they should not be interpreted as behaviorally learned taste modeling.
+- Without a Spotify login, recommendations are not personalized from listening history.
+- With a Spotify login, only a small share of a real history is in the 180-song catalog (1 of 132 tracks in testing). Most personalization therefore comes from labels and similarity, not real plays.
+- Spotify no longer gives new apps audio features, and gives genres for few artists. History labels are LLM estimates of genre, mood, and energy, not measurements.
+- `similar:` links compare artist, genre, and mood text with embeddings. They are restricted to the same genre to avoid title-word false matches, but they are still approximate.
+- Wikipedia summaries can be stale, and the explainer may only repeat what they say.
 
 ## 10. Reliability And Safety Features
 
-The project includes several guardrails and evaluation-oriented features:
-
-- structured Pydantic schemas for plan, semantic picks, and check outputs
-- confidence scoring and issue flags in the check step
-- retry/refine loop capped at 2 iterations
-- templated fallback when the LLM explainer fails
-- structured logging for LLM calls in `logs/llm_calls.jsonl`
-- automated tests covering agent flow, tools, explainer behavior, and deterministic ranking
-
-Known testing status:
-
-- the suite passes with `PYTHONPATH=. pytest -p no:cacheprovider`
-- plain `pytest` currently has an import-path issue because tests import `src.recommender`
+- Pydantic-validated structured outputs for the plan, check, explanations, and Spotify labels
+- confidence scoring and issue flags in the check step; deterministic checks for clear-cut cases
+- the refine loop is capped at one retry
+- citation validation for every explanation claim
+- offline fallbacks for every LLM step (heuristic plan, deterministic check, template explanation, embedding-neighbour profile)
+- every LLM call is logged to `logs/llm_calls.jsonl` (model, latency, tokens; no prompts)
+- 63 offline tests (`uv run pytest`) covering scoring, tools, retrieval, citations, the agent loop, the explainer, and Spotify auth, client, profile, and labelling
 
 ## 11. Evaluation Summary
 
-The system has been evaluated primarily through automated tests and representative manual runs.
+`scripts/run_eval.py` runs 24 labeled queries. These are live results with Claude (`eval/live/results.md`):
 
-What has been validated:
+| Retrieval | P@5 | nDCG@10 | Recall@20 | MRR | p50 latency |
+|---|---|---|---|---|---|
+| LLM reads whole catalog | 0.767 | 0.779 | 0.660 | 0.734 | 1794 ms |
+| BM25 | 0.675 | 0.685 | 0.627 | 0.735 | 12 ms |
+| Dense | 0.700 | 0.691 | 0.707 | 0.840 | 12 ms |
+| Hybrid | 0.775 | 0.762 | 0.707 | 0.856 | 12 ms |
 
-- deterministic ranking remains stable
-- tool dispatch routes correctly
-- structured filtering respects hard constraints
-- semantic retrieval prompt wiring is correct under mocks
-- the agent emits trace events in the correct order
-- the check step is skipped when no candidates are returned and replaced with a synthesized low-confidence verdict
-- the explainer falls back safely when the API call fails
-- refine behavior switches tools or relaxes constraints in the tested scenarios
+End to end (k=5): P@5 0.792, 3.17 LLM calls per query, citation validity 1.000, LLM-judge faithfulness 0.851, p50 latency 14.4 s (explain 8.8 s of that).
 
-This evaluation is good for correctness and reliability of the workflow, but it is not yet a full recommendation-quality benchmark.
+Spotify personalization was tested live: login, profile derivation, three personalized queries, and the Streamlit connect flow. There is no labeled benchmark for personalized quality yet.
 
 ## 12. Misuse Considerations
 
@@ -241,6 +258,7 @@ Possible misuses include:
 - overstating the system as a production-quality personalized recommender
 - treating LLM narratives as objective truth rather than user-facing explanations
 - assuming missing songs imply bad taste matches instead of sparse catalog coverage
+- reading "similar to a song you play" as a measured audio match rather than an estimate
 
 Ways the project reduces that risk:
 
@@ -251,13 +269,24 @@ Ways the project reduces that risk:
 
 ## 13. Future Improvements
 
-- fix the import-path issue so plain `pytest` works
-- build a formal evaluation harness with saved benchmark queries
-- incorporate more song features into final ranking
-- expand the catalog for better genre and mood coverage
-- add softer similarity between related genres
-- compare templated vs. LLM explanation quality with a repeatable rubric
+- import a listener's top tracks into the catalog, with estimated features clearly labeled
+- an "exclude recently played" toggle and a counterfactual view (remove a history track or zero out a signal, then re-rank)
+- Last.fm crowd tags in the knowledge store
+- softer similarity between related genres
+- a labeled benchmark for personalized recommendations
+- bring p50 latency under 5 s
 
-## 14. Reflection
+## 14. Privacy
+
+Spotify personalization handles personal listening data, so it is kept local by default:
+
+- **Tokens:** `.spotify_tokens.json`, file mode 600, gitignored. They're only sent to Spotify. Scopes are read-only: `user-read-recently-played`, `user-top-read`, `user-library-read`.
+- **History:** fetched live and kept in memory. Streamlit caches the derived profile for 30 minutes. Raw history is never written to disk.
+- **Labels:** titles and artists of history tracks missing from the catalog are sent to Claude once for labelling. The labels are cached in `.cache/spotify_track_labels.json`.
+- **Logs:** `logs/llm_calls.jsonl` holds model, latency, and token counts, never prompts or history.
+- **Deletion:** **Disconnect Spotify** deletes the tokens. Delete `.cache/spotify_track_labels.json` to remove the labels.
+- **Access:** the Spotify app runs in Development Mode, so only users allowlisted in the dashboard (max 5) can log in.
+
+## 15. Reflection
 
 This project reinforced that an AI system is rarely just "the model." The real behavior comes from how planning, retrieval, scoring, fallback logic, and error handling interact. The most valuable design choice here was keeping the LLM responsible for interpretation and explanation while leaving final ranking to deterministic logic. That split made the system easier to reason about, easier to test, and more honest about uncertainty.

@@ -1,5 +1,9 @@
 # Music Recommender - Data Flow
 
+## Original System (v1)
+
+The first version: a fixed profile scored against every song in the catalog.
+
 ```mermaid
 flowchart TD
     A["Input: User Preferences
@@ -47,94 +51,87 @@ flowchart TD
     E --> F
 ```
 
-## Extended System: Agentic Workflow Data Flow
+## Current System: Agentic RAG + Spotify
 
-The original deterministic data flow above is still part of the project. The extended system adds an LLM-driven orchestration layer in front of that scorer so the app can accept free-text requests, choose retrieval behavior, evaluate candidate quality, and explain the final recommendations.
+The scoring idea from v1 survives as the 7 profile signals inside an additive reranker. Around it, an agent plans and checks retrieval over a small knowledge store, and an optional Spotify login turns listening history into a profile, a taste vector, and citable evidence.
+
+```mermaid
+flowchart LR
+    subgraph SOURCES["Sources"]
+        CSV["data/songs.csv<br/>180 songs, 18 genres"]
+        WIKI["Wikipedia<br/>artist + genre summaries"]
+        LFM["Last.fm tags<br/>optional"]
+        SPAPI["Spotify Web API<br/>recent, top tracks, top artists, saved"]
+    end
+
+    subgraph BUILD["Built once (scripts/build_knowledge.py)"]
+        DOCS["data/rag/*.jsonl<br/>artist:, genre:, tags: docs"]
+    end
+
+    subgraph INDEX["Index (.cache/)"]
+        CARDS["song: cards"]
+        VEC["Embedding cache<br/>bge-small, keyed by text hash"]
+        BM["BM25 index"]
+    end
+
+    subgraph USER["Per listener"]
+        TOK[".spotify_tokens.json<br/>mode 600, gitignored"]
+        LAB[".cache/spotify_track_labels.json<br/>LLM labels per track"]
+        PROF["Profile<br/>derived prefs, taste vector,<br/>recently played, hist: + similar: docs"]
+    end
+
+    CSV --> CARDS
+    WIKI --> DOCS
+    LFM --> DOCS
+    DOCS --> VEC
+    CARDS --> VEC
+    CARDS --> BM
+    DOCS --> BM
+    TOK --> SPAPI
+    SPAPI --> PROF
+    LAB <--> PROF
+
+    Q["Query"] --> AGENT["Agent<br/>plan, act, check, refine"]
+    PROF --> AGENT
+    VEC --> AGENT
+    BM --> AGENT
+    AGENT --> RANK["Additive reranker"]
+    RANK --> EXP["Explainer + citation validator"]
+    EXP --> OUT["UI / CLI"]
+    AGENT -.-> LOG["logs/llm_calls.jsonl<br/>model, latency, tokens"]
+    EXP -.-> LOG
+```
+
+### Pipeline per query
 
 ```mermaid
 flowchart TD
-    A["User Input
-    free-text query
-    + selected listener profile"]
-
-    B["Agent: PLAN
-    parse intent
-    extract constraints
-    choose retrieval tool
-    set expected result count"]
-
-    C{"Chosen Tool"}
-
-    D["structured_filter
-    deterministic filtering on
-    genre, mood, BPM, energy,
-    and instrumentalness"]
-
-    E["semantic_search
-    LLM reviews the catalog
-    and returns matching song ids"]
-
-    F["hybrid
-    structured filter first,
-    then semantic search inside
-    the narrowed candidate set"]
-
-    G["Candidate Songs"]
-
-    H["Agent: CHECK
-    assign confidence
-    emit flags:
-    looks_good
-    low_result_count
-    constraint_violated
-    intent_mismatch"]
-
-    I{"Refine?"}
-
-    J["Refined Plan
-    relax filters
-    widen numeric ranges
-    or switch tools
-    max 2 retries"]
-
-    K["Deterministic Re-ranker
-    7-signal scoring
-    + diversity cap"]
-
-    L["Agent: EXPLAIN
-    generate recommendation
-    narrative from score breakdown
-    and check verdict
-    fallback to templated text
-    on API failure"]
-
-    M["Outputs
-    Streamlit recommendations
-    CLI recommendations
-    trace events
-    logs/llm_calls.jsonl"]
-
-    A --> B
-    B --> C
-    C --> D
-    C --> E
-    C --> F
-    D --> G
+    A["Query + profile"] --> B["PLAN<br/>intent, filters, expected count, tool"]
+    B --> C{"Tool"}
+    C --> D["structured_filter<br/>hard filters in code"]
+    C --> E["semantic_search<br/>hybrid retriever"]
+    C --> F["hybrid<br/>filter, then retrieve"]
+    D --> G["Candidates + evidence docs per song"]
     E --> G
     F --> G
-    G --> H
-    H --> I
-    I -- Yes --> J
-    J --> B
-    I -- No --> K
-    K --> L
-    L --> M
+    G --> H["CHECK<br/>confidence + flags"]
+    H -- "weak, max 1 refine" --> B
+    H --> I["Rerank<br/>query_match, taste_match, novelty<br/>+ 7 profile signals"]
+    I --> J["EXPLAIN<br/>one batched call, claims cite ids"]
+    J --> K["Validate citations<br/>drop uncited claims"]
+    K --> L["Ranked cards, score bars,<br/>cited evidence, trace"]
 ```
 
-### Notes On The New Flow
+### What data goes where
 
-- The original rule-based recommender is still the final ranking authority.
-- The new AI layer adds a `plan -> act -> check -> respond` loop.
-- Retrieval is dynamic: the agent can choose `structured_filter`, `semantic_search`, or `hybrid`.
-- The system now exposes confidence, flags, trace events, and structured LLM logs as reliability signals.
-- If the first pass looks weak, the refine loop can broaden or switch retrieval strategies before ranking.
+| Data | Where it lives | Leaves the machine? |
+|---|---|---|
+| Song catalog, knowledge docs | `data/` (in the repo) | No |
+| Embeddings, BM25 index | `.cache/` | No (embeddings run locally) |
+| Spotify tokens | `.spotify_tokens.json`, mode 600, gitignored | Only to Spotify |
+| Listening history | in memory; Streamlit caches it for 30 min | No |
+| History track labels (title, artist → genre, mood, energy) | `.cache/spotify_track_labels.json` | Titles and artists of unmatched tracks are sent to Claude once, for labelling |
+| Query, catalog snippets, evidence | in memory | Sent to Claude for plan, check, and explain |
+| LLM call log | `logs/llm_calls.jsonl` | No. Holds model, latency, and token counts, not prompts |
+
+To remove your Spotify data: click **Disconnect Spotify** (deletes the tokens), then delete `.cache/spotify_track_labels.json`.
