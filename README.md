@@ -283,7 +283,7 @@ My collaboration with AI during development was useful but not flawless. One hel
 ## Future Improvements
 
 - Import a listener's top tracks into the catalog (with clearly labeled estimated features) so more recommendations can cite real plays
-- An "exclude recently played" toggle, and a counterfactual view: remove a history track or zero out a signal, then see which songs move
+- An "exclude recently played" toggle, and extend the UI's What If panel (which already removes score signals and re-ranks) to removing a history track
 - Last.fm crowd tags in the knowledge store
 - Bring p50 latency under 5 s, mainly by shortening the explain step
 - A demo video and screenshots of the evidence panel

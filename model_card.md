@@ -270,7 +270,7 @@ Ways the project reduces that risk:
 ## 13. Future Improvements
 
 - import a listener's top tracks into the catalog, with estimated features clearly labeled
-- an "exclude recently played" toggle and a counterfactual view (remove a history track or zero out a signal, then re-rank)
+- an "exclude recently played" toggle; extend the What If panel (already removes signals and re-ranks) to removing a history track
 - Last.fm crowd tags in the knowledge store
 - softer similarity between related genres
 - a labeled benchmark for personalized recommendations
